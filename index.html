@@ -399,6 +399,115 @@ const JERSEY_PRESETS=[
   {name:"Brown",   hex:"#8b4513"},
 ];
 
+// ─── ADD PLAYER SHEET (with live profile lookup) ─────────────
+function AddPlayerSheet({form,setForm,positions,isEdit,profileDB,accent,onSave}){
+  var PCOLS={GK:"#f59e0b",DEF:"#3b82f6",MID:"#10b981",FWD:"#ef4444",ANY:"#8b5cf6",
+    PG:"#f59e0b",SG:"#3b82f6",SF:"#10b981",PF:"#ef4444",C:"#60a5fa",
+    Setter:"#f59e0b",Libero:"#3b82f6",OH:"#10b981",MB:"#ef4444",OPP:"#a78bfa",
+    Singles:"#60a5fa",Doubles:"#fbbf24"};
+
+  // Live profile lookup as user types
+  var savedProfile=form.name.trim().length>1?lookupProfile(profileDB,form.name):null;
+  var [profileApplied,setProfileApplied]=useState(false);
+
+  function applyProfile(){
+    if(!savedProfile)return;
+    setForm(function(f){return Object.assign({},f,{position:savedProfile.position,skill:savedProfile.skill});});
+    setProfileApplied(true);
+  }
+
+  function handleNameChange(val){
+    setForm(function(f){return Object.assign({},f,{name:val});});
+    setProfileApplied(false);
+  }
+
+  return <div style={{display:"flex",flexDirection:"column",gap:16,paddingBottom:8}}>
+
+    {/* Name input */}
+    <div>
+      <label style={{display:"block",fontSize:11,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.45)",marginBottom:8}}>Name</label>
+      <input value={form.name} onChange={function(e){handleNameChange(e.target.value);}}
+        placeholder="Player name..." autoFocus
+        style={{width:"100%",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"13px 14px",color:"#fff",fontSize:16}}/>
+
+      {/* Profile found banner */}
+      {savedProfile&&!isEdit&&<div style={{marginTop:8,padding:"10px 12px",borderRadius:9,
+        background:"rgba(0,255,136,0.07)",border:"1px solid rgba(0,255,136,0.25)",
+        display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+          <span style={{fontSize:14}}>&#128190;</span>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#00ff88"}}>Profile found!</div>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2}}>
+              <span style={{fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:3,
+                background:(PCOLS[savedProfile.position]||"#8b5cf6")+"33",
+                color:PCOLS[savedProfile.position]||"#8b5cf6"}}>{savedProfile.position}</span>
+              <SkillDots value={savedProfile.skill} size={8} color="#00ff88"/>
+              <span style={{fontSize:12,fontWeight:800,color:"#00ff88"}}>{savedProfile.skill}</span>
+              <span style={{fontSize:11,color:"rgba(255,255,255,0.35)"}}>{skillLabel(savedProfile.skill)}</span>
+            </div>
+          </div>
+        </div>
+        {!profileApplied
+          ?<button className="btn" onClick={applyProfile} style={{
+              padding:"7px 12px",borderRadius:7,fontSize:12,fontWeight:800,flexShrink:0,
+              background:"#00ff88",color:"#080c10",border:"none",whiteSpace:"nowrap"}}>
+              Use Saved
+            </button>
+          :<span style={{fontSize:11,color:"#00ff88",fontWeight:700,flexShrink:0}}>&#10003; Applied</span>
+        }
+      </div>}
+    </div>
+
+    {/* Position */}
+    <div>
+      <label style={{display:"block",fontSize:11,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.45)",marginBottom:8}}>Position / Role</label>
+      <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+        {positions.map(function(pos){return <button key={pos} className="btn" onClick={function(){setForm(function(f){return Object.assign({},f,{position:pos});});}} style={{
+          padding:"9px 13px",borderRadius:8,fontSize:13,minHeight:44,
+          background:form.position===pos?(PCOLS[pos]||accent):"rgba(255,255,255,0.07)",
+          color:form.position===pos?"#fff":"rgba(255,255,255,0.55)"}}>{pos}</button>;})}</div>
+    </div>
+
+    {/* Skill */}
+    <div>
+      <label style={{display:"block",fontSize:11,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.45)",marginBottom:8}}>
+        Skill&nbsp;<span style={{color:accent,fontWeight:700}}>{skillLabel(form.skill)}</span>
+      </label>
+      <div style={{display:"flex",gap:6,marginBottom:6}}>
+        {[1,2,3,4,5].map(function(s){
+          var active=form.skill===s;
+          return <button key={s} className="btn" onClick={function(){setForm(function(f){return Object.assign({},f,{skill:s});});}} style={{
+            flex:1,height:46,borderRadius:9,fontSize:16,fontWeight:800,
+            background:active?"rgba(0,255,136,0.18)":form.skill>=s?"rgba(0,255,136,0.07)":"rgba(255,255,255,0.06)",
+            color:active?"#00ff88":form.skill>=s?"rgba(0,255,136,0.7)":"rgba(255,255,255,0.25)",
+            border:active?"1px solid rgba(0,255,136,0.5)":form.skill>=s?"1px solid rgba(0,255,136,0.2)":"1px solid rgba(255,255,255,0.08)"}}>{s}</button>;
+        })}
+      </div>
+      <div style={{display:"flex",gap:6}}>
+        {[1.5,2.5,3.5,4.5].map(function(s){
+          var active=form.skill===s;
+          return <button key={s} className="btn" onClick={function(){setForm(function(f){return Object.assign({},f,{skill:s});});}} style={{
+            flex:1,height:34,borderRadius:7,fontSize:12,fontWeight:700,
+            background:active?"rgba(0,255,136,0.18)":"rgba(255,255,255,0.04)",
+            color:active?"#00ff88":"rgba(255,255,255,0.3)",
+            border:active?"1px solid rgba(0,255,136,0.5)":"1px solid rgba(255,255,255,0.07)"}}>+½</button>;
+        })}
+        <div style={{flex:1}}/>
+      </div>
+      <div style={{marginTop:7,display:"flex",alignItems:"center",gap:8}}>
+        <SkillDots value={form.skill} size={10}/>
+        <span style={{fontSize:11,color:"rgba(255,255,255,0.28)"}}>tap number then +½ to refine</span>
+      </div>
+    </div>
+
+    <button className="btn" onClick={onSave} style={{padding:"15px",borderRadius:11,fontSize:15,fontWeight:800,letterSpacing:"0.07em",
+      background:accent,color:"#080c10",boxShadow:"0 0 22px "+accent+"55",marginTop:4}}>
+      {isEdit?"UPDATE PLAYER":"ADD TO SQUAD"}
+    </button>
+  </div>;
+}
+
 // ─── DUPLICATE REVIEW COMPONENT ─────────────────────────────
 function DuplicateReviewSheet({review,onConfirm,onClose,sport}){
   var PCOLS={GK:"#f59e0b",DEF:"#3b82f6",MID:"#10b981",FWD:"#ef4444",ANY:"#8b5cf6",
@@ -1161,9 +1270,12 @@ function App(){
     {/* ═══ SHEETS ═══ */}
 
     {(sheet==="addPlayer"||sheet==="editPlayer")&&<Sheet title={sheet==="editPlayer"?"Edit Player":"Add Player"} onClose={function(){setSheet(null);}}>
-      <PlayerForm form={form} setForm={setForm} positions={sport.positions} onSave={savePlayer}
-        saveLabel={sheet==="editPlayer"?"UPDATE PLAYER":"ADD TO SQUAD"}
-        accent={sheet==="editPlayer"?"#fbbf24":accentColor}/>
+      <AddPlayerSheet
+        form={form} setForm={setForm} positions={sport.positions}
+        isEdit={sheet==="editPlayer"}
+        profileDB={profileDB}
+        accent={sheet==="editPlayer"?"#fbbf24":accentColor}
+        onSave={savePlayer}/>
     </Sheet>}
 
     {sheet==="editTp"&&tpForm&&<Sheet title="Edit Player" onClose={function(){setSheet(null);setTpForm(null);}}>
