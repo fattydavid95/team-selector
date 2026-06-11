@@ -804,8 +804,10 @@ function App(){
 
   function flash2(msg,type){setFlash({msg,type:type||"ok"});setTimeout(function(){setFlash(null);},2200);}
 
-  var activeList=lists.find(function(l){return l.id===activeListId;})||lists[0];
-  var players=activeList?activeList.players:[];
+  // Bulletproof active list — never undefined, always has a players array
+  var safeList=lists&&lists.length>0?lists:([{id:1,name:"My Squad",players:[]}]);
+  var activeList=safeList.find(function(l){return l.id===activeListId;})||safeList[0];
+  var players=(activeList&&activeList.players)||[];
 
   function updPlayers(fn){
     setListsAndSave(function(ls){return ls.map(function(l){return l.id===activeListId?Object.assign({},l,{players:fn(l.players)}):l;});});
@@ -874,9 +876,17 @@ function App(){
     setNewListName("");setSheet(null);flash2("Renamed!");
   }
   function deleteList(id){
-    if(lists.length===1)return;
+    // Always keep at least one list
     var r=lists.filter(function(l){return l.id!==id;});
-    setListsAndSave(r);setActiveListId(r[0].id);setTeams(null);
+    if(r.length===0){
+      // Safety net — never allow empty lists array
+      r=[{id:nlid++,name:"My Squad",players:[]}];
+    }
+    // If we deleted the active list, switch to first remaining
+    var newActiveId=id===activeListId?r[0].id:activeListId;
+    setListsAndSave(r);
+    setActiveListId(newActiveId);
+    setTeams(null);setEditingTeams(false);setShowExport(false);
   }
 
   var effectiveNumTeams=numTeams;
@@ -1550,7 +1560,33 @@ function App(){
   </div>;
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+class ErrorBoundary extends React.Component{
+  constructor(p){super(p);this.state={err:null};}
+  static getDerivedStateFromError(e){return {err:e};}
+  render(){
+    if(this.state.err){
+      return <div style={{minHeight:"100vh",background:"#080c10",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'Rajdhani',sans-serif"}}>
+        <div style={{fontSize:40,marginBottom:16}}>⚠️</div>
+        <div style={{fontSize:18,fontWeight:700,color:"#ef4444",marginBottom:8}}>Something went wrong</div>
+        <div style={{fontSize:13,color:"rgba(255,255,255,0.4)",marginBottom:24,textAlign:"center",maxWidth:320}}>
+          {this.state.err.message||"An unexpected error occurred."}
+        </div>
+        <button onClick={function(){
+          try{localStorage.removeItem("team-selector-v1");}catch(e){}
+          window.location.reload();
+        }} style={{padding:"12px 24px",borderRadius:9,background:"#00ff88",color:"#080c10",border:"none",fontSize:15,fontWeight:800,cursor:"pointer"}}>
+          Reset &amp; Reload
+        </button>
+        <div style={{fontSize:11,color:"rgba(255,255,255,0.2)",marginTop:12}}>Profile database will be kept</div>
+      </div>;
+    }
+    return this.props.children;
+  }
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  React.createElement(ErrorBoundary,null,React.createElement(App))
+);
 </script>
 </body>
 </html>
