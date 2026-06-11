@@ -677,14 +677,19 @@ function loadProfileDB(){
 function saveProfileDB(db){
   try{localStorage.setItem(PROFILE_DB_KEY,JSON.stringify(db));}catch(e){}
 }
+function normaliseName(name){
+  // Collapse multiple spaces, trim, lowercase — makes matching robust
+  return (name||"").trim().replace(/\s+/g," ").toLowerCase();
+}
 function upsertProfile(db,player){
-  // Always keep the most recent skill/position for a player name
-  var key=player.name.trim().toLowerCase();
-  db[key]={name:player.name.trim(),position:player.position,skill:player.skill,updatedAt:Date.now()};
+  if(!player||!player.name||!player.name.trim())return db;
+  var key=normaliseName(player.name);
+  db[key]={name:player.name.trim(),position:player.position||"ANY",skill:player.skill||3,updatedAt:Date.now()};
   return db;
 }
 function lookupProfile(db,name){
-  return db[name.trim().toLowerCase()]||null;
+  if(!db||!name)return null;
+  return db[normaliseName(name)]||null;
 }
 
 function App(){
@@ -734,6 +739,32 @@ function App(){
       }catch(e){setSaveStatus("error");}
     },400);
   }
+
+  const {useEffect}=React;
+
+  // Seed profile DB from ALL players in ALL lists on startup and whenever lists change
+  // This ensures existing players are always in the DB even if added before this feature
+  useEffect(function(){
+    setProfileDB(function(db){
+      var updated=Object.assign({},db);
+      var changed=false;
+      lists.forEach(function(l){
+        (l.players||[]).forEach(function(p){
+          var key=normaliseName(p.name);
+          // Only upsert if not already in DB (don't overwrite manually edited profiles)
+          if(!updated[key]){
+            upsertProfile(updated,p);
+            changed=true;
+          }
+        });
+      });
+      if(changed){
+        try{localStorage.setItem(PROFILE_DB_KEY,JSON.stringify(updated));}catch(e){}
+        return updated;
+      }
+      return db;
+    });
+  },[lists]);
 
   // Wrap state setters to also trigger save
   function setListsAndSave(fn){
@@ -1421,7 +1452,17 @@ function App(){
 
         {/* Danger zone */}
         <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:14,marginTop:4,display:"flex",flexDirection:"column",gap:8}}>
-          <div style={{fontSize:10,color:"rgba(255,255,255,0.28)",letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:2}}>Danger Zone</div>
+          <div style={{fontSize:10,color:"rgba(255,255,255,0.28)",letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:6}}>Profile Database</div>
+          <button className="btn" onClick={function(){
+            // Force reseed entire DB from all lists
+            var updated={};
+            lists.forEach(function(l){(l.players||[]).forEach(function(p){upsertProfile(updated,p);});});
+            try{localStorage.setItem(PROFILE_DB_KEY,JSON.stringify(updated));}catch(e){}
+            setProfileDB(updated);
+            flash2("Profile DB rebuilt — "+Object.keys(updated).length+" profiles!");
+          }} style={{width:"100%",padding:"12px",borderRadius:9,fontSize:13,background:"rgba(0,255,136,0.07)",color:"rgba(0,255,136,0.7)",border:"1px solid rgba(0,255,136,0.18)",marginBottom:8}}>
+            &#128260; Rebuild Profile DB from All Lists
+          </button>
           <button className="btn" onClick={function(){
             if(window.confirm("Clear current squad only? Profile database will be kept.")){
               updPlayers(function(){return [];});
