@@ -935,34 +935,44 @@ function App(){
     function teamSkill(t){
       return t.players.reduce(function(s,p){return s+p.skill;},0);
     }
-
-    // Assign a player to the team with lowest skill total
-    function assignToWeakest(p){
-      var minIdx=0;var minS=teamSkill(result[0]);
-      for(var j=1;j<effectiveNumTeams;j++){
-        var ts=teamSkill(result[j]);
-        if(ts<minS){minS=ts;minIdx=j;}
-      }
-      result[minIdx].players.push(p);
+    function teamPosCount(t,pos){
+      return t.players.filter(function(p){return p.position===pos;}).length;
     }
 
-    // Step 1 — for EACH key position, distribute that group separately
-    // e.g. 3 GKs across 2 teams → GK1(best)→weakest team, GK2→weakest team, GK3→weakest team
-    // This guarantees no team gets 2 GKs unless there are more GKs than teams
-    var remaining=players.map(function(p){return Object.assign({},p);});
-    KEY_POSITIONS.forEach(function(pos){
-      var posPlayers=remaining.filter(function(p){return p.position===pos;});
-      remaining=remaining.filter(function(p){return p.position!==pos;});
-      // Sort by skill descending, then distribute one at a time to weakest team
-      posPlayers.sort(function(a,b){return b.skill-a.skill;});
-      posPlayers.forEach(function(p){assignToWeakest(p);});
-    });
+    // Assign player with HARD position constraint:
+    // Among teams that have the fewest of this position, pick the one with lowest skill total
+    function assignPlayer(p){
+      var isKey=KEY_POSITIONS.indexOf(p.position)!==-1;
+      var candidates=result.map(function(t,idx){return {idx:idx,skill:teamSkill(t),posCount:teamPosCount(t,p.position)};});
 
-    // Step 2 — distribute remaining players to weakest team (greedy by skill)
-    remaining.sort(function(a,b){return b.skill-a.skill;});
-    remaining.forEach(function(p){assignToWeakest(p);});
+      if(isKey){
+        // Find minimum count of this position across all teams
+        var minPosCount=candidates.reduce(function(m,c){return Math.min(m,c.posCount);},Infinity);
+        // Only consider teams at that minimum (enforce spread)
+        var eligible=candidates.filter(function(c){return c.posCount===minPosCount;});
+        // Among eligible, pick lowest skill total
+        eligible.sort(function(a,b){return a.skill-b.skill;});
+        result[eligible[0].idx].players.push(p);
+      }else{
+        // Non-key: just pick lowest skill total
+        candidates.sort(function(a,b){return a.skill-b.skill;});
+        result[candidates[0].idx].players.push(p);
+      }
+    }
 
-    setTeams(result);setEditingTeams(false);setShowExport(false);setView("teams");flash2("Teams generated!");
+    // Sort all players by skill descending so best players distributed first
+    var allSorted=players.map(function(p){return Object.assign({},p);});
+    allSorted.sort(function(a,b){return b.skill-a.skill;});
+
+    // First pass: distribute key-position players
+    var keyPlayers=allSorted.filter(function(p){return KEY_POSITIONS.indexOf(p.position)!==-1;});
+    var otherPlayers=allSorted.filter(function(p){return KEY_POSITIONS.indexOf(p.position)===-1;});
+
+    keyPlayers.forEach(function(p){assignPlayer(p);});
+    otherPlayers.forEach(function(p){assignPlayer(p);});
+
+    setTeams(result);setEditingTeams(false);setShowExport(false);setView("teams");
+    flash2("Teams generated!");
   }
 
   function updTeams(fn){setTeams(function(ts){return fn(ts.map(function(t){return Object.assign({},t,{players:t.players.slice()});}));});}
