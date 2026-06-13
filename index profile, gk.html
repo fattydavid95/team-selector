@@ -1,0 +1,1746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>Team Selector</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{background:#080c10;font-family:'Rajdhani',sans-serif;color:#e2e8f0;font-size:16px;}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:#00ff88;border-radius:2px}
+.btn{cursor:pointer;border:none;font-family:inherit;font-weight:700;letter-spacing:0.05em;transition:all 0.14s;-webkit-appearance:none;}
+.btn:active:not(:disabled){transform:scale(0.95);opacity:0.82;}
+.btn:disabled{opacity:0.26;cursor:not-allowed;}
+input,textarea,select{font-family:inherit;-webkit-appearance:none;font-size:16px;}
+input:focus,textarea:focus{border-color:#00ff88!important;outline:none;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes flashA{0%,100%{opacity:0}15%,85%{opacity:1}}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.t-card{animation:fadeUp 0.28s ease both;}
+.rh:active{background:rgba(255,255,255,0.06)!important;}
+.sport-card:active{transform:scale(0.96);}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useRef}=React;
+
+// ─── SPORT DEFINITIONS ───────────────────────────────────────
+const SPORTS={
+  football:{
+    id:"football",label:"Football",emoji:"⚽",
+    defaultAside:11,minAside:3,maxAside:11,defaultTeams:2,
+    positions:["GK","DEF","MID","FWD","ANY"],color:"#00ff88",
+    gameTypes:[
+      {id:"11aside",label:"11-a-Side",desc:"Full pitch, official format",mostPlayed:true,
+        rules:{overview:"The standard format of football played between two teams of 11 players. Objective: score by getting the ball into the opponent's goal.",players:"11 per side including goalkeeper.",duration:"Two 45-minute halves. Extra time & penalties if required in knockouts.",scoring:"1 goal = 1 point. Most goals wins.",key:["Offside — attacker must not be behind last defender when ball is played","Handball — deliberate hand ball = free kick or penalty","Yellow card = warning, two yellows = red = sent off","Goal kick when ball crosses goal line off attacker; corner if off defender","Free kicks: direct (can score) and indirect (must touch another player first)"],tips:["Spread wide to stretch the defence","Play through thirds — defence, midfield, attack","Keep possession under pressure","Win set pieces — corners and free kicks are prime scoring chances","Press high to force errors in build-up"]}},
+      {id:"7aside",label:"7-a-Side",desc:"Smaller pitch, popular recreational",mostPlayed:false,
+        rules:{overview:"A popular recreational format on a smaller pitch. More touches per player, faster pace than 11-a-side.",players:"7 per side including goalkeeper.",duration:"Typically two 25–30 minute halves. Varies by league.",scoring:"1 goal = 1 point.",key:["Offside still applies in most formats — check your league rules","No slide tackles in most recreational leagues","Goal kicks and corners still apply","Unlimited rolling substitutions in most formats","Smaller goals — shooting from distance is less effective"],tips:["Move quickly in tight spaces","GK distribution is crucial — short pitch means fast transitions","Wide players have more impact per player ratio","Press as a unit — less ground to cover","Fitness matters more per player with fewer teammates"]}},
+      {id:"5aside",label:"5-a-Side",desc:"Indoor/small-sided, fast & intense",mostPlayed:false,
+        rules:{overview:"Fast-paced small-sided game usually played indoors or on artificial turf. High intensity, lots of touches.",players:"5 per side including goalkeeper.",duration:"Typically two 20-minute halves or timed rounds.",scoring:"1 goal = 1 point.",key:["No offside in most 5-a-side formats","No slide tackles — standing tackles only","Kick-ins instead of throw-ins in some venues","Wall play allowed in cage/arena formats","GK cannot pick up back-passes"],tips:["Play quick one-twos — space is tight","GK should be vocal and organise","Rotate positions fluidly — everyone defends and attacks","Stay compact defensively — don't leave gaps","Attack quickly on turnovers before the defence resets"]}}
+    ]
+  },
+  futsal:{
+    id:"futsal",label:"Futsal",emoji:"🏟️",
+    defaultAside:5,minAside:3,maxAside:5,defaultTeams:2,
+    positions:["GK","DEF","MID","FWD","ANY"],color:"#00ff88",
+    gameTypes:[
+      {id:"official",label:"Official Futsal",desc:"FIFA-standard indoor rules",mostPlayed:true,
+        rules:{overview:"Futsal is an official FIFA-recognised 5-a-side indoor variant on a hard court with a small low-bounce ball. Highly technical and fast.",players:"5 per side including goalkeeper.",duration:"Two 20-minute halves. Clock stops on dead ball.",scoring:"1 goal = 1 point.",key:["No sliding tackles","Kick-ins instead of throw-ins","GK has 4 seconds to distribute","No offside rule","5+ accumulated fouls per half = 10m direct free kick for opponent","GK cannot touch ball again after a back-pass with feet"],tips:["Technical ball control is key — small ball rewards skill","Rotate and make runs constantly","GK acts as a sweeper-keeper","Short sharp passes in triangles","Use pivot (target player) to link play"]}},
+      {id:"recreational",label:"Recreational",desc:"Casual court game, relaxed rules",mostPlayed:false,
+        rules:{overview:"Relaxed futsal for casual games — same small court but with simplified rules for fun and flow.",players:"5 per side, often interchangeable.",duration:"Agreed time or first to X goals.",scoring:"1 goal = 1 point.",key:["Sliding tackles often allowed by agreement","Rolling subs — unlimited","No accumulated foul rule","GK can pick up back-passes in casual play","Kick-ins or throw-ins depending on venue"],tips:["Focus on enjoyment and participation","Rotate goalkeepers so everyone gets a turn","Keep it moving — minimal stoppages","Encourage newer players to take risks","Set fair teams to keep scores close"]}}
+    ]
+  },
+  basketball:{
+    id:"basketball",label:"Basketball",emoji:"🏀",
+    defaultAside:5,minAside:3,maxAside:5,defaultTeams:2,
+    positions:["PG","SG","SF","PF","C","ANY"],color:"#f97316",
+    gameTypes:[
+      {id:"5v5",label:"5v5 Full Court",desc:"Official basketball format",mostPlayed:true,
+        rules:{overview:"Full court basketball between two teams of 5. Score by shooting through the opponent's basket.",players:"5 per side.",duration:"Four 10-min quarters (FIBA) or 12-min (NBA). Overtime if tied.",scoring:"3pts beyond arc, 2pts inside, 1pt free throw.",key:["Dribbling — must bounce ball while moving","Travelling — illegal movement without dribble","Personal fouls — 5 fouls = fouled out","Shot clock — 24 seconds to attempt a shot","3-second violation — can't stand in the lane for 3+ seconds","Back-court violation — can't return ball past half-court"],tips:["Move without the ball to create open looks","Screen for teammates to free them","Attack basket to draw fouls","Defensive rebounding wins games","Push transition after turnovers"]}},
+      {id:"3v3",label:"3v3 Half Court",desc:"Olympic format, fast & physical",mostPlayed:false,
+        rules:{overview:"3-on-3 is an official Olympic sport played on a half court. Fast, physical, and skill-intensive.",players:"3 per side plus 1 substitute.",duration:"First to 21 points or 10-minute time limit.",scoring:"1pt inside the arc, 2pts beyond the arc, 1pt free throw.",key:["Check ball at the top of the key after made baskets and fouls","Defense must clear ball beyond arc after defensive rebound or steal","No shot clock but 12-second shot clock applies in FIBA 3x3","Foul out at 5 personal fouls","Overtime: sudden death — next basket wins"],tips:["Post play and physicality matter more — smaller court","Drive and kick to shooters","Defensive positioning is critical — no help-side like 5v5","Set screens off-ball constantly","Use the 2-point arc more — it's the equivalent of a 3 in regular game"]}}
+    ]
+  },
+  badminton:{
+    id:"badminton",label:"Badminton",emoji:"🏸",
+    defaultAside:2,minAside:1,maxAside:2,defaultTeams:2,
+    positions:["ANY"],color:"#a78bfa",
+    gameTypes:[
+      {id:"singles",label:"Singles",desc:"1v1 — full court width",mostPlayed:false,
+        rules:{overview:"Singles badminton is 1v1 on a narrower court (the doubles tramlines are out). Pure skill, fitness and tactical play.",players:"1 per side.",duration:"Best of 3 games to 21 points. Win by 2, cap at 30-29.",scoring:"Rally scoring — point on every rally regardless of server.",key:["Sideline tramlines are OUT in singles","Server serves diagonally into opponent's service court","Service must be hit below waist height","If server wins rally, they score and serve again; if receiver wins, they score AND take the serve","No second serve — one serve attempt only","Let called if shuttle touches net on serve but lands in"],tips:["Use the full length of the court — alternate smashes and drops","Attack from the net early","Vary pace — mix fast clears with slow drops","Stay centred after each shot to cover the court","Fitness wins in singles — long rallies are common"]}},
+      {id:"doubles",label:"Doubles",desc:"2v2 — wider court, faster rallies",mostPlayed:true,
+        rules:{overview:"Doubles uses the full width of the court (tramlines in). Faster pace with different serving and rotation rules.",players:"2 per side.",duration:"Best of 3 games to 21 points. Win by 2, cap at 30-29.",scoring:"Rally scoring — point on every rally.",key:["Tramlines are IN for doubles","Service court is shorter in doubles — long service line is closer to net","Only the server scores (old rules) — now rally scoring in BWF","Partners rotate positions depending on attack/defence situation","Serving order and court positions rotate based on score parity","Let called if shuttle touches net on serve but lands in"],tips:["Front-back formation when attacking, side-by-side when defending","Communicate loudly with your partner","The net player should intercept early and aggressively","Drive flat returns to pressure opponents","Serve short low to the T to limit attacking returns"]}},
+      {id:"mixed",label:"Mixed Doubles",desc:"1 male + 1 female per side",mostPlayed:false,
+        rules:{overview:"Mixed doubles follows the same rules as regular doubles but with specific gender rotation conventions and strategic considerations.",players:"2 per side (1 male + 1 female).",duration:"Best of 3 games to 21 points.",scoring:"Rally scoring.",key:["Same court as doubles — tramlines in","Traditional tactic: female at net, male at back (not mandatory but common)","Service rotation same as doubles","Opponents often target the female player — positioning matters","Same let and fault rules as regular doubles"],tips:["Female player should dominate the net and intercept","Male player controls the baseline and smashes","Rotate smoothly — avoid gaps between front and back","Attack to the female opponent's body at the net","Use deceptive net shots to pull opponents forward then smash"]}}
+    ]
+  },
+  pickleball:{
+    id:"pickleball",label:"Pickleball",emoji:"🥒",
+    defaultAside:2,minAside:1,maxAside:2,defaultTeams:2,
+    positions:["ANY"],color:"#34d399",
+    gameTypes:[
+      {id:"doubles",label:"Doubles",desc:"2v2 — most popular format",mostPlayed:true,
+        scoringOptions:[
+          {id:"11",label:"To 11",mostPlayed:true,desc:"Standard recreational & tournament",winBy:2,
+            scoring:"First to 11 points, win by 2. Only the serving team scores (side-out scoring). Server announces: our score – their score – server number (1 or 2)."},
+          {id:"15",label:"To 15",mostPlayed:false,desc:"Longer game, more momentum swings",winBy:2,
+            scoring:"First to 15 points, win by 2. Same side-out scoring rules. Used in some tournament formats for more decisive results."},
+          {id:"21",label:"To 21",mostPlayed:false,desc:"Extended format, tournament & rally",winBy:2,
+            scoring:"First to 21 points, win by 2. Used in some competitive brackets. Rally scoring variant (point on every rally) is sometimes used at 21 to keep games faster."}
+        ],
+        rules:{overview:"Doubles pickleball is the most common format worldwide. Two teams of two on a small court with solid paddles and a plastic ball.",players:"2 per side.",key:["Kitchen (NVZ) — cannot volley while standing in the 7ft non-volley zone near the net","Double-bounce rule — ball must bounce once on each side before volleying is allowed","Both players on serving team get to serve before side-out (except the very first serve of the game — only 1 serve allowed)","Serve must be underhand, paddle below wrist, cross-court into the diagonal service box","Fault: ball out of bounds, hits net, NVZ volley violation, ball bounces twice, wrong server or receiver"],tips:["Rush the kitchen line after the third shot — net control wins","Third shot drop: a soft arcing shot that lands in the opponent's kitchen to neutralise their position","Communicate clearly: call 'mine', 'yours', 'out'","Attack the middle — reduces angles and causes partner confusion","Dink patiently until you get an attackable high ball"]}},
+      {id:"singles",label:"Singles",desc:"1v1 — physically demanding",mostPlayed:false,
+        scoringOptions:[
+          {id:"11",label:"To 11",mostPlayed:true,desc:"Standard singles format",winBy:2,
+            scoring:"First to 11 points, win by 2. Side-out scoring — only server scores. Server's score determines side: even score = serve from right, odd score = serve from left."},
+          {id:"15",label:"To 15",mostPlayed:false,desc:"Endurance test",winBy:2,
+            scoring:"First to 15, win by 2. Same serving side rules based on server's score."},
+          {id:"21",label:"To 21",mostPlayed:false,desc:"Long format — fitness heavy",winBy:2,
+            scoring:"First to 21, win by 2. Very physically demanding in singles — used mainly in competitive settings."}
+        ],
+        rules:{overview:"Singles pickleball uses the same court but is far more physically demanding — you cover the whole court alone. Serving and scoring rules differ from doubles.",players:"1 per side.",key:["Only ONE serve per side-out (doubles gets two)","Serve side determined by server's score: even = right side, odd = left side","Same kitchen (NVZ) and double-bounce rules apply","No partner — court management and positioning are critical","Let out balls go — a common singles error is chasing balls that would land out"],tips:["Keep opponent deep with drives and lobs to open up the court","Attack short balls aggressively — punish weak returns","Use sharp angles to pull opponent off the court then go behind them","Move opponent side-to-side before going down the line","Don't rush the kitchen too early in singles — balance matters more"]}},
+      {id:"skinny",label:"Skinny Singles",desc:"Half-court practice format",mostPlayed:false,
+        scoringOptions:[
+          {id:"11",label:"To 11",mostPlayed:true,desc:"Standard skinny format",winBy:2,
+            scoring:"First to 11, win by 2. Same side-out scoring as singles. Only half the court width is used."},
+          {id:"rally",label:"Rally Scoring",mostPlayed:false,desc:"Point every rally — faster games",winBy:2,
+            scoring:"Point awarded on every rally regardless of server. First to 11 (or agreed number), win by 2. Great for practice efficiency."}
+        ],
+        rules:{overview:"Skinny singles uses only half the court width — either crosscourt or straight down the line. Excellent for shot precision practice and when court space is limited.",players:"1 per side.",key:["Only half the court is in play — agreed before starting (crosscourt or down the line)","Crosscourt skinny: both players play diagonally — most common version","Down-the-line skinny: both play straight on their own side","Same NVZ kitchen, double-bounce and fault rules apply","Tighter margins — out balls more common, forces precision"],tips:["Perfect for isolating and drilling specific shots","Crosscourt skinny is ideal for dinking and third-shot drop practice","Forces accurate placement over raw power","Great warm-up before full court games","Use it to work on weaknesses — e.g. backhand dinking only"]}}
+    ]
+  },
+  volleyball:{
+    id:"volleyball",label:"Volleyball",emoji:"🏐",
+    defaultAside:6,minAside:2,maxAside:6,defaultTeams:2,
+    positions:["Setter","Libero","OH","MB","OPP","ANY"],color:"#fbbf24",
+    gameTypes:[
+      {id:"indoor",label:"Indoor 6v6",desc:"Official indoor volleyball",mostPlayed:true,
+        rules:{overview:"Indoor volleyball played between two teams of 6 on a hard court divided by a net. Three touches to return the ball.",players:"6 per side. Libero is a specialist defensive player.",duration:"Best of 5 sets to 25 points (win by 2). 5th set to 15.",scoring:"Rally scoring — point on every rally.",key:["Max 3 touches per team before returning","No player hits twice consecutively","Rotation — clockwise after winning a side-out","Libero cannot serve, block or attack above net height","Back-row players cannot attack above net height in front of attack line","Block touches do count as one of the three team touches in rally"],tips:["Pass accurately to setter — good offence starts with the pass","Attack angles, not straight","Block with hands angled into the court","Libero communication organises the back row","Serve tough — float and jump serves create errors"]}},
+      {id:"beach",label:"Beach 2v2",desc:"Sand court, 2 players per side",mostPlayed:false,
+        rules:{overview:"Beach volleyball is 2v2 on sand. No libero, no fixed positions — both players cover the whole court.",players:"2 per side.",duration:"Best of 3 sets. Sets 1&2 to 21 (win by 2), set 3 to 15.",scoring:"Rally scoring.",key:["Only 2 players — no rotations, positions are flexible","Setting with open hands is allowed but tightly judged for carries/double contacts","Blocking counts as one of the three touches","Hand signals behind the back communicate blocking intentions to partner","No libero or positional specialisations","Wind and sun are active factors to manage"],tips:["Communication is everything with only 2 players","Signal your block intentions every rally","Serve to the sun — forces opponent to look into the glare","Dig-set-attack rhythm must be tight","Cover the line when blocking cross — your partner covers cross when you block line"]}},
+      {id:"sitting",label:"Sitting Volleyball",desc:"Para-sport, seated on the floor",mostPlayed:false,
+        rules:{overview:"Sitting volleyball is a Paralympic sport played on a smaller court. Players must maintain contact with the floor when playing the ball.",players:"6 per side.",duration:"Best of 5 sets to 25 points (win by 2). 5th set to 15.",scoring:"Rally scoring.",key:["Player's pelvis must be in contact with the floor when hitting the ball","Blocking the serve IS allowed (unlike standing volleyball)","Court is smaller: 10m x 6m (vs 18x9 in standing)","Net is lower: 1.15m men, 1.05m women","Movement is by shuffling on the floor — no standing"],tips:["Upper body strength is key — core and arms","Quick shuffling and floor positioning is vital","Blocking is more aggressive — serve blocks are legal","Keep ball high to allow time for positioning","Develop strong serving to exploit mobility limitations"]}}
+    ]
+  },
+  tennis:{
+    id:"tennis",label:"Tennis",emoji:"🎾",
+    defaultAside:1,minAside:1,maxAside:2,defaultTeams:2,
+    positions:["ANY"],color:"#eab308",
+    gameTypes:[
+      {id:"singles",label:"Singles",desc:"1v1 on full court",mostPlayed:true,
+        rules:{overview:"Tennis singles is 1v1. Score points, games, sets and matches. One of the most physically demanding individual sports.",players:"1 per side.",duration:"Best of 3 sets (most formats). Grand Slam men's: best of 5. Each set to 6 games.",scoring:"Points: Love, 15, 30, 40, Game. Deuce at 40-40 — win by 2. Sets: first to 6 (win by 2). Tiebreak at 6-6.",key:["Serve must land in the diagonally opposite service box","Two serves — fault then double fault = point to opponent","Ball may bounce once before return","Let on serve = replay","Tiebreak: first to 7 points (win by 2), serve alternates every 2 points","In/Out: ball on the line = in"],tips:["Consistent first serve beats a powerful but unreliable one","Open up the court with wide shots then go behind opponent","Approach net after a short ball","Watch ball all the way onto the racket","Spin — topspin for depth, slice to stay low"]}},
+      {id:"doubles",label:"Doubles",desc:"2v2, net player role is key",mostPlayed:false,
+        rules:{overview:"Doubles tennis is 2v2 using a wider court (doubles alley is in play). Aggressive net play and teamwork are central.",players:"2 per side.",duration:"Best of 3 sets. Same scoring as singles.",scoring:"Same as singles — points, games, sets.",key:["Doubles alleys are IN — full width of court used","Service rotation: same player serves a full game, alternates each game","Net player should be active — intercept, volley and poach","Australian formation: both players on same side of court before serve — used to disrupt returner","Serve and volley is more effective in doubles — net control wins"],tips:["Server should follow serve into the net","Net player: read the return and move aggressively to poach","Communicate on lobs — call 'mine' or 'yours' early","Return down the middle to reduce angles","Pick on the weaker opponent's backhand consistently"]}},
+      {id:"tiebreak",label:"Match Tiebreak",desc:"Super tiebreak format — quick games",mostPlayed:false,
+        rules:{overview:"The match tiebreak (also called a super tiebreak) is used as a decider in many doubles and recreational formats instead of a full third set.",players:"1v1 or 2v2.",duration:"First to 10 points, win by 2.",scoring:"First to 10 points. Serve alternates every 2 points (first server gets 1 then alternates every 2).",key:["First to 10 points wins (win by 2, no cap)","Serve: 1 point first player, then alternate every 2 points","Used as the 3rd set in many club, recreational and doubles formats","Same in/out rules as regular tennis","Often called at 1-set-all to decide the match quickly"],tips:["Play conservatively early — avoid unforced errors","Treat each point as crucial — momentum shifts fast","First serve percentage is critical — no room for double faults","Take the net early — net player dominates short format","Stay calm — 10-point formats are won mentally as much as physically"]}}
+    ]
+  },
+  tableTennis:{
+    id:"tableTennis",label:"Table Tennis",emoji:"🏓",
+    defaultAside:1,minAside:1,maxAside:2,defaultTeams:2,
+    positions:["ANY"],color:"#60a5fa",
+    gameTypes:[
+      {id:"singles",label:"Singles",desc:"1v1 — classic format",mostPlayed:true,
+        rules:{overview:"Singles table tennis is 1v1. Fast, spin-heavy and intensely technical. One of the fastest racket sports in the world.",players:"1 per side.",duration:"Best of 5 or 7 games. Each game to 11 points (win by 2).",scoring:"11 points per game. Service alternates every 2 points. At 10-10 (deuce), alternate every point.",key:["Ball must bounce on your side then opponent's on every shot","Serve: throw ball 16cm from open palm, hit behind the end line","Edge of table = in; side of table = out","Deuce at 10-10 — alternate serve every point until 2-point lead","Hiding the ball during serve is illegal — must be visible"],tips:["Read the spin on the opponent's paddle angle","Serve with heavy variation to disrupt rhythm","Stay close to the table to cut off time","Topspin loops force the opponent to defend","Aim for the elbow — hardest body position to attack from"]}},
+      {id:"doubles",label:"Doubles",desc:"2v2 — alternating shots",mostPlayed:false,
+        rules:{overview:"Doubles table tennis requires players to alternate shots strictly. Serve must always go to the right-hand service court.",players:"2 per side.",duration:"Best of 5 or 7 games to 11 points.",scoring:"Same as singles. Service alternates every 2 points between pairs.",key:["Players must alternate shots — you cannot hit two consecutive balls","Serve must go diagonally: right-half of table to right-half of opponent's table","After serving 2 points, the receiver becomes server, partner of server becomes receiver","At deuce (10-10), service still alternates every point","Partners must move to allow each other access to the ball — footwork is crucial"],tips:["Footwork choreography — decide who moves where before each rally","Serve to set up your partner's strong shot","Communicate which balls are 'yours'","Use short pushes to disrupt opponent's alternation rhythm","A strong server can dominate even in doubles"]}}
+    ]
+  }
+};
+
+const TCOLS=["#00ff88","#ff6b6b","#60a5fa","#fbbf24","#a78bfa","#f97316","#34d399","#e879f9","#fb7185","#38bdf8"];
+const SLABELS={"1":"Beginner","1.5":"Beginner+","2":"Basic","2.5":"Basic+","3":"Average","3.5":"Average+","4":"Good","4.5":"Good+","5":"Elite"};
+function skillLabel(v){return SLABELS[String(v)]||String(v);}
+let nid=200,nlid=20;
+
+function SkillDots({value,color,size}){
+  color=color||"#00ff88";size=size||9;
+  return <div style={{display:"flex",gap:3,alignItems:"center"}}>
+    {[1,2,3,4,5].map(function(i){
+      var full=value>=i;
+      var half=!full&&value>=i-0.5&&value<i;
+      return <div key={i} style={{width:size,height:size,borderRadius:2,flexShrink:0,position:"relative",overflow:"hidden",
+        background:"rgba(255,255,255,0.12)",boxShadow:full?"0 0 5px "+color:"none"}}>
+        {full&&<div style={{position:"absolute",inset:0,background:color,borderRadius:2}}/>}
+        {half&&<div style={{position:"absolute",top:0,left:0,width:"50%",height:"100%",background:color,borderRadius:"2px 0 0 2px"}}/>}
+      </div>;
+    })}
+  </div>;
+}
+
+function Sheet({title,onClose,children}){
+  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.78)",zIndex:400,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={onClose}>
+    <div style={{background:"#111827",borderRadius:"18px 18px 0 0",maxHeight:"93vh",overflowY:"auto",animation:"slideUp 0.24s ease"}} onClick={function(e){e.stopPropagation();}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"20px 20px 14px",position:"sticky",top:0,background:"#111827",borderBottom:"1px solid rgba(255,255,255,0.08)",zIndex:1}}>
+        <div style={{width:38,height:4,borderRadius:2,background:"rgba(255,255,255,0.18)",position:"absolute",top:8,left:"50%",transform:"translateX(-50%)"}}/>
+        <h2 style={{fontSize:16,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:"#fff",marginTop:6}}>{title}</h2>
+        <button onClick={onClose} className="btn" style={{background:"rgba(255,255,255,0.09)",color:"rgba(255,255,255,0.65)",width:34,height:34,borderRadius:8,fontSize:17,display:"flex",alignItems:"center",justifyContent:"center",marginTop:6}}>&#10005;</button>
+      </div>
+      <div style={{padding:"20px 18px 12px"}}>{children}</div>
+    </div>
+  </div>;
+}
+
+function PlayerForm({form,setForm,positions,onSave,saveLabel,accent}){
+  accent=accent||"#00ff88";
+  var pcols={GK:"#f59e0b",DEF:"#3b82f6",MID:"#10b981",FWD:"#ef4444",ANY:"#8b5cf6",
+    PG:"#f59e0b",SG:"#3b82f6",SF:"#10b981",PF:"#ef4444",C:"#60a5fa",
+    Setter:"#f59e0b",Libero:"#3b82f6",OH:"#10b981",MB:"#ef4444",OPP:"#a78bfa",
+    Singles:"#60a5fa",Doubles:"#fbbf24"};
+  return <div style={{display:"flex",flexDirection:"column",gap:16,paddingBottom:8}}>
+    <div>
+      <label style={{display:"block",fontSize:11,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.45)",marginBottom:8}}>Name</label>
+      <input value={form.name} onChange={function(e){setForm(function(f){return Object.assign({},f,{name:e.target.value});});}}
+        placeholder="Player name..." autoFocus
+        style={{width:"100%",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"13px 14px",color:"#fff",fontSize:16}}/>
+    </div>
+    <div>
+      <label style={{display:"block",fontSize:11,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.45)",marginBottom:8}}>Position / Role</label>
+      <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+        {positions.map(function(pos){return <button key={pos} className="btn" onClick={function(){setForm(function(f){return Object.assign({},f,{position:pos});});}} style={{
+          padding:"9px 13px",borderRadius:8,fontSize:13,minHeight:44,
+          background:form.position===pos?(pcols[pos]||accent):"rgba(255,255,255,0.07)",
+          color:form.position===pos?"#fff":"rgba(255,255,255,0.55)"}}>{pos}</button>;})}</div>
+    </div>
+    <div>
+      <label style={{display:"block",fontSize:11,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.45)",marginBottom:8}}>
+        Skill&nbsp;<span style={{color:accent,fontWeight:700}}>{skillLabel(form.skill)}</span>
+      </label>
+      {/* Full values row */}
+      <div style={{display:"flex",gap:6,marginBottom:6}}>
+        {[1,2,3,4,5].map(function(s){
+          var active=form.skill===s;
+          return <button key={s} className="btn" onClick={function(){setForm(function(f){return Object.assign({},f,{skill:s});});}} style={{
+            flex:1,height:46,borderRadius:9,fontSize:16,fontWeight:800,
+            background:active?"rgba(0,255,136,0.18)":form.skill>=s?"rgba(0,255,136,0.07)":"rgba(255,255,255,0.06)",
+            color:active?"#00ff88":form.skill>=s?"rgba(0,255,136,0.7)":"rgba(255,255,255,0.25)",
+            border:active?"1px solid rgba(0,255,136,0.5)":form.skill>=s?"1px solid rgba(0,255,136,0.2)":"1px solid rgba(255,255,255,0.08)"}}>{s}</button>;
+        })}
+      </div>
+      {/* Half values row */}
+      <div style={{display:"flex",gap:6}}>
+        {[1.5,2.5,3.5,4.5].map(function(s){
+          var active=form.skill===s;
+          return <button key={s} className="btn" onClick={function(){setForm(function(f){return Object.assign({},f,{skill:s});});}} style={{
+            flex:1,height:36,borderRadius:7,fontSize:12,fontWeight:700,
+            background:active?"rgba(0,255,136,0.18)":"rgba(255,255,255,0.04)",
+            color:active?"#00ff88":"rgba(255,255,255,0.3)",
+            border:active?"1px solid rgba(0,255,136,0.5)":"1px solid rgba(255,255,255,0.07)"}}>+½</button>;
+        })}
+        <div style={{flex:1}}/>
+      </div>
+      <div style={{marginTop:7,display:"flex",alignItems:"center",gap:8}}>
+        <SkillDots value={form.skill} size={11}/>
+        <span style={{fontSize:11,color:"rgba(255,255,255,0.3)"}}>tap a number then +½ to refine</span>
+      </div>
+    </div>
+    <button className="btn" onClick={onSave} style={{padding:"15px",borderRadius:11,fontSize:15,fontWeight:800,letterSpacing:"0.07em",
+      background:accent,color:"#080c10",boxShadow:"0 0 22px "+accent+"55",marginTop:4}}>{saveLabel}</button>
+  </div>;
+}
+
+function RulesSheet({sport,onClose}){
+  var s=sport;
+  var hasTypes=s.gameTypes&&s.gameTypes.length>1;
+  var [selType,setSelType]=useState(s.gameTypes?(s.gameTypes.find(function(t){return t.mostPlayed;})||s.gameTypes[0]).id:null);
+  var gt=hasTypes?s.gameTypes.find(function(t){return t.id===selType;})||s.gameTypes[0]:s.gameTypes&&s.gameTypes[0];
+  var hasScoringOptions=gt&&gt.scoringOptions&&gt.scoringOptions.length>0;
+  var [selScoring,setSelScoring]=useState(null);
+  // When game type changes, reset scoring to the mostPlayed option
+  var effectiveScoring=hasScoringOptions?(selScoring&&gt.scoringOptions.find(function(o){return o.id===selScoring;})||(gt.scoringOptions.find(function(o){return o.mostPlayed;})||gt.scoringOptions[0])):null;
+  var r=gt?gt.rules:(s.rules||{});
+  var scoringText=effectiveScoring?effectiveScoring.scoring:r.scoring;
+  var durationText=effectiveScoring?("Win by "+effectiveScoring.winBy+" points. "+effectiveScoring.desc+"."):r.duration;
+
+  function handleTypeChange(id){
+    setSelType(id);
+    setSelScoring(null); // reset scoring sub-selection when type changes
+  }
+
+  return <Sheet title={s.emoji+" "+s.label+" — Rules & Tips"} onClose={onClose}>
+    <div style={{display:"flex",flexDirection:"column",gap:15,paddingBottom:24}}>
+
+      {/* Game type selector */}
+      {hasTypes&&<div>
+        <div style={{fontSize:10,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.35)",fontWeight:700,marginBottom:9}}>Game Type</div>
+        <div style={{display:"flex",flexDirection:"column",gap:7}}>
+          {s.gameTypes.map(function(t){
+            var active=selType===t.id;
+            return <button key={t.id} className="btn" onClick={function(){handleTypeChange(t.id);}} style={{
+              padding:"11px 14px",borderRadius:10,textAlign:"left",fontSize:14,
+              background:active?s.color+"18":"rgba(255,255,255,0.03)",
+              border:active?"1px solid "+s.color+"55":"1px solid rgba(255,255,255,0.08)",
+              color:active?s.color:"rgba(255,255,255,0.6)",
+              display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:7}}>
+                  <span style={{fontWeight:700,fontSize:15}}>{t.label}</span>
+                  {t.mostPlayed&&<span style={{fontSize:9,fontWeight:800,letterSpacing:"0.08em",padding:"2px 7px",borderRadius:20,
+                    background:"#fbbf2433",color:"#fbbf24",border:"1px solid #fbbf2455",textTransform:"uppercase"}}>Most Played</span>}
+                </div>
+                <div style={{fontSize:12,opacity:0.55,fontWeight:500,marginTop:2}}>{t.desc}</div>
+              </div>
+              {active&&<div style={{width:8,height:8,borderRadius:"50%",background:s.color,flexShrink:0,marginLeft:8}}/>}
+            </button>;
+          })}
+        </div>
+      </div>}
+
+      {/* Scoring / Points target sub-selector (e.g. pickleball) */}
+      {hasScoringOptions&&<div>
+        <div style={{fontSize:10,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.35)",fontWeight:700,marginBottom:9}}>Points Target</div>
+        <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+          {gt.scoringOptions.map(function(opt){
+            var isEff=effectiveScoring&&effectiveScoring.id===opt.id;
+            return <button key={opt.id} className="btn" onClick={function(){setSelScoring(opt.id);}} style={{
+              flex:1,minWidth:0,padding:"10px 8px",borderRadius:9,textAlign:"center",
+              background:isEff?s.color+"20":"rgba(255,255,255,0.04)",
+              border:isEff?"1px solid "+s.color+"55":"1px solid rgba(255,255,255,0.09)",
+              color:isEff?s.color:"rgba(255,255,255,0.55)"}}>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                <span style={{fontSize:16,fontWeight:800}}>{opt.label}</span>
+                {opt.mostPlayed&&<span style={{fontSize:8,fontWeight:800,letterSpacing:"0.07em",padding:"1px 6px",borderRadius:20,
+                  background:"#fbbf2433",color:"#fbbf24",border:"1px solid #fbbf2444",textTransform:"uppercase"}}>Most Played</span>}
+                {!opt.mostPlayed&&<span style={{fontSize:9,color:"rgba(255,255,255,0.3)",fontWeight:500}}>{opt.desc}</span>}
+              </div>
+            </button>;
+          })}
+        </div>
+        {effectiveScoring&&<div style={{marginTop:9,padding:"10px 13px",background:"rgba(255,255,255,0.03)",borderRadius:8,border:"1px solid rgba(255,255,255,0.07)"}}>
+          <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.38)",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>How scoring works</div>
+          <div style={{fontSize:13,color:"rgba(255,255,255,0.7)",lineHeight:1.55}}>{scoringText}</div>
+        </div>}
+      </div>}
+
+      {(hasTypes||hasScoringOptions)&&<div style={{height:1,background:"rgba(255,255,255,0.07)"}}/>}
+
+      {/* Active game type header */}
+      {gt&&<div style={{background:s.color+"16",border:"1px solid "+s.color+"30",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
+        <div style={{fontSize:20}}>{s.emoji}</div>
+        <div>
+          <div style={{fontSize:14,fontWeight:700,color:s.color,letterSpacing:"0.04em"}}>
+            {gt.label}{effectiveScoring?" — "+effectiveScoring.label:""}
+          </div>
+          {gt.desc&&<div style={{fontSize:11,color:"rgba(255,255,255,0.38)",marginTop:1}}>{gt.desc}</div>}
+        </div>
+      </div>}
+
+      {/* Overview */}
+      <div style={{background:"rgba(255,255,255,0.03)",borderRadius:12,padding:"13px 15px",borderLeft:"3px solid "+s.color}}>
+        <div style={{fontSize:10,fontWeight:700,color:s.color,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:6}}>Overview</div>
+        <div style={{fontSize:14,color:"rgba(255,255,255,0.7)",lineHeight:1.65}}>{r.overview}</div>
+      </div>
+
+      {/* Players / Duration / Scoring */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <div style={{background:"rgba(255,255,255,0.03)",borderRadius:10,padding:"11px 13px"}}>
+          <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.38)",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>Players</div>
+          <div style={{fontSize:13,color:"rgba(255,255,255,0.72)",lineHeight:1.5}}>{r.players}</div>
+        </div>
+        <div style={{background:"rgba(255,255,255,0.03)",borderRadius:10,padding:"11px 13px"}}>
+          <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.38)",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>Duration / Target</div>
+          <div style={{fontSize:13,color:"rgba(255,255,255,0.72)",lineHeight:1.5}}>{durationText}</div>
+        </div>
+      </div>
+      {!hasScoringOptions&&r.scoring&&<div style={{background:"rgba(255,255,255,0.03)",borderRadius:10,padding:"11px 13px"}}>
+        <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,0.38)",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>Scoring</div>
+        <div style={{fontSize:13,color:"rgba(255,255,255,0.72)",lineHeight:1.5}}>{r.scoring}</div>
+      </div>}
+
+      {/* Key rules */}
+      <div>
+        <div style={{fontSize:11,fontWeight:700,color:s.color,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:9}}>Key Rules</div>
+        <div style={{display:"flex",flexDirection:"column",gap:7}}>
+          {(r.key||[]).map(function(k,i){return <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",background:"rgba(255,255,255,0.03)",borderRadius:8,padding:"10px 12px"}}>
+            <div style={{width:6,height:6,borderRadius:"50%",background:s.color,marginTop:5,flexShrink:0}}/>
+            <div style={{fontSize:14,color:"rgba(255,255,255,0.68)",lineHeight:1.55}}>{k}</div>
+          </div>;})}
+        </div>
+      </div>
+
+      {/* Tips */}
+      <div>
+        <div style={{fontSize:11,fontWeight:700,color:"#fbbf24",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:9}}>&#128161; Tips to Play Better</div>
+        <div style={{display:"flex",flexDirection:"column",gap:7}}>
+          {(r.tips||[]).map(function(t,i){return <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",background:"rgba(251,191,36,0.05)",borderRadius:8,padding:"10px 12px",border:"1px solid rgba(251,191,36,0.1)"}}>
+            <div style={{fontSize:12,color:"#fbbf24",flexShrink:0,marginTop:2}}>&#9650;</div>
+            <div style={{fontSize:14,color:"rgba(255,255,255,0.68)",lineHeight:1.55}}>{t}</div>
+          </div>;})}
+        </div>
+      </div>
+    </div>
+  </Sheet>;
+}
+
+// ─── JERSEY COLOUR PRESETS ───────────────────────────────────
+const JERSEY_PRESETS=[
+  {name:"Red",     hex:"#e63946"},
+  {name:"Blue",    hex:"#1d7ae0"},
+  {name:"Green",   hex:"#2dc653"},
+  {name:"Yellow",  hex:"#f4d03f"},
+  {name:"Orange",  hex:"#f97316"},
+  {name:"Purple",  hex:"#9b59b6"},
+  {name:"White",   hex:"#f0f0f0"},
+  {name:"Black",   hex:"#1a1a2e"},
+  {name:"Pink",    hex:"#e91e8c"},
+  {name:"Cyan",    hex:"#00bcd4"},
+  {name:"Maroon",  hex:"#800000"},
+  {name:"Navy",    hex:"#001f5b"},
+  {name:"Lime",    hex:"#b5e61d"},
+  {name:"Sky",     hex:"#56cfe1"},
+  {name:"Gold",    hex:"#ffd700"},
+  {name:"Brown",   hex:"#8b4513"},
+];
+
+// ─── ADD PLAYER SHEET (with live profile lookup) ─────────────
+function AddPlayerSheet({form,setForm,positions,isEdit,profileDB,accent,onSave}){
+  var PCOLS={GK:"#f59e0b",DEF:"#3b82f6",MID:"#10b981",FWD:"#ef4444",ANY:"#8b5cf6",
+    PG:"#f59e0b",SG:"#3b82f6",SF:"#10b981",PF:"#ef4444",C:"#60a5fa",
+    Setter:"#f59e0b",Libero:"#3b82f6",OH:"#10b981",MB:"#ef4444",OPP:"#a78bfa",
+    Singles:"#60a5fa",Doubles:"#fbbf24"};
+
+  // Live profile lookup as user types
+  var savedProfile=form.name.trim().length>1?lookupProfile(profileDB,form.name):null;
+  var [profileApplied,setProfileApplied]=useState(false);
+
+  function applyProfile(){
+    if(!savedProfile)return;
+    setForm(function(f){return Object.assign({},f,{position:savedProfile.position,skill:savedProfile.skill});});
+    setProfileApplied(true);
+  }
+
+  function handleNameChange(val){
+    setForm(function(f){return Object.assign({},f,{name:val});});
+    setProfileApplied(false);
+  }
+
+  return <div style={{display:"flex",flexDirection:"column",gap:16,paddingBottom:8}}>
+
+    {/* Name input */}
+    <div>
+      <label style={{display:"block",fontSize:11,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.45)",marginBottom:8}}>Name</label>
+      <input value={form.name} onChange={function(e){handleNameChange(e.target.value);}}
+        placeholder="Player name..." autoFocus
+        style={{width:"100%",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"13px 14px",color:"#fff",fontSize:16}}/>
+
+      {/* Profile found banner */}
+      {savedProfile&&!isEdit&&<div style={{marginTop:8,padding:"10px 12px",borderRadius:9,
+        background:"rgba(0,255,136,0.07)",border:"1px solid rgba(0,255,136,0.25)",
+        display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+          <span style={{fontSize:14}}>&#128190;</span>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#00ff88"}}>Profile found!</div>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2}}>
+              <span style={{fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:3,
+                background:(PCOLS[savedProfile.position]||"#8b5cf6")+"33",
+                color:PCOLS[savedProfile.position]||"#8b5cf6"}}>{savedProfile.position}</span>
+              <SkillDots value={savedProfile.skill} size={8} color="#00ff88"/>
+              <span style={{fontSize:12,fontWeight:800,color:"#00ff88"}}>{savedProfile.skill}</span>
+              <span style={{fontSize:11,color:"rgba(255,255,255,0.35)"}}>{skillLabel(savedProfile.skill)}</span>
+            </div>
+          </div>
+        </div>
+        {!profileApplied
+          ?<button className="btn" onClick={applyProfile} style={{
+              padding:"7px 12px",borderRadius:7,fontSize:12,fontWeight:800,flexShrink:0,
+              background:"#00ff88",color:"#080c10",border:"none",whiteSpace:"nowrap"}}>
+              Use Saved
+            </button>
+          :<span style={{fontSize:11,color:"#00ff88",fontWeight:700,flexShrink:0}}>&#10003; Applied</span>
+        }
+      </div>}
+    </div>
+
+    {/* Position */}
+    <div>
+      <label style={{display:"block",fontSize:11,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.45)",marginBottom:8}}>Position / Role</label>
+      <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+        {positions.map(function(pos){return <button key={pos} className="btn" onClick={function(){setForm(function(f){return Object.assign({},f,{position:pos});});}} style={{
+          padding:"9px 13px",borderRadius:8,fontSize:13,minHeight:44,
+          background:form.position===pos?(PCOLS[pos]||accent):"rgba(255,255,255,0.07)",
+          color:form.position===pos?"#fff":"rgba(255,255,255,0.55)"}}>{pos}</button>;})}</div>
+    </div>
+
+    {/* Skill */}
+    <div>
+      <label style={{display:"block",fontSize:11,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.45)",marginBottom:8}}>
+        Skill&nbsp;<span style={{color:accent,fontWeight:700}}>{skillLabel(form.skill)}</span>
+      </label>
+      <div style={{display:"flex",gap:6,marginBottom:6}}>
+        {[1,2,3,4,5].map(function(s){
+          var active=form.skill===s;
+          return <button key={s} className="btn" onClick={function(){setForm(function(f){return Object.assign({},f,{skill:s});});}} style={{
+            flex:1,height:46,borderRadius:9,fontSize:16,fontWeight:800,
+            background:active?"rgba(0,255,136,0.18)":form.skill>=s?"rgba(0,255,136,0.07)":"rgba(255,255,255,0.06)",
+            color:active?"#00ff88":form.skill>=s?"rgba(0,255,136,0.7)":"rgba(255,255,255,0.25)",
+            border:active?"1px solid rgba(0,255,136,0.5)":form.skill>=s?"1px solid rgba(0,255,136,0.2)":"1px solid rgba(255,255,255,0.08)"}}>{s}</button>;
+        })}
+      </div>
+      <div style={{display:"flex",gap:6}}>
+        {[1.5,2.5,3.5,4.5].map(function(s){
+          var active=form.skill===s;
+          return <button key={s} className="btn" onClick={function(){setForm(function(f){return Object.assign({},f,{skill:s});});}} style={{
+            flex:1,height:34,borderRadius:7,fontSize:12,fontWeight:700,
+            background:active?"rgba(0,255,136,0.18)":"rgba(255,255,255,0.04)",
+            color:active?"#00ff88":"rgba(255,255,255,0.3)",
+            border:active?"1px solid rgba(0,255,136,0.5)":"1px solid rgba(255,255,255,0.07)"}}>+½</button>;
+        })}
+        <div style={{flex:1}}/>
+      </div>
+      <div style={{marginTop:7,display:"flex",alignItems:"center",gap:8}}>
+        <SkillDots value={form.skill} size={10}/>
+        <span style={{fontSize:11,color:"rgba(255,255,255,0.28)"}}>tap number then +½ to refine</span>
+      </div>
+    </div>
+
+    <button className="btn" onClick={onSave} style={{padding:"15px",borderRadius:11,fontSize:15,fontWeight:800,letterSpacing:"0.07em",
+      background:accent,color:"#080c10",boxShadow:"0 0 22px "+accent+"55",marginTop:4}}>
+      {isEdit?"UPDATE PLAYER":"ADD TO SQUAD"}
+    </button>
+  </div>;
+}
+
+// ─── DUPLICATE REVIEW COMPONENT ─────────────────────────────
+function DuplicateReviewSheet({review,onConfirm,onClose,sport}){
+  var PCOLS={GK:"#f59e0b",DEF:"#3b82f6",MID:"#10b981",FWD:"#ef4444",ANY:"#8b5cf6",
+    PG:"#f59e0b",SG:"#3b82f6",SF:"#10b981",PF:"#ef4444",C:"#60a5fa",
+    Setter:"#f59e0b",Libero:"#3b82f6",OH:"#10b981",MB:"#ef4444",OPP:"#a78bfa",
+    Singles:"#60a5fa",Doubles:"#fbbf24"};
+
+  // decision per player: "saved" | "new" | "skip"
+  var initDecisions=review.pending.map(function(x){
+    if(x.inSquad)return "skip";        // already in squad — default skip
+    if(x.savedProfile)return "saved";  // has profile — default use saved
+    return "new";
+  });
+  const [decisions,setDecisions]=useState(initDecisions);
+  function setDecision(i,val){setDecisions(function(d){var n=d.slice();n[i]=val;return n;});}
+
+  function handleConfirm(){
+    var resolved=review.pending.map(function(x,i){
+      var d=decisions[i];
+      if(d==="skip")return {name:x.name,position:x.position,skill:x.skill,skip:true};
+      var useSaved=d==="saved"&&x.savedProfile;
+      return {
+        name:x.name,
+        position:useSaved?x.savedProfile.position:x.position,
+        skill:useSaved?x.savedProfile.skill:x.skill,
+        skip:false
+      };
+    });
+    onConfirm(resolved);
+  }
+
+  var dupeCount=review.pending.filter(function(x){return x.savedProfile&&!x.inSquad;}).length;
+  var squadDupeCount=review.pending.filter(function(x){return x.inSquad;}).length;
+  var accentColor=sport?sport.color:"#00ff88";
+
+  return <Sheet title="&#128269; Review Import" onClose={onClose}>
+    <div style={{display:"flex",flexDirection:"column",gap:12,paddingBottom:16}}>
+
+      {/* Summary */}
+      <div style={{display:"flex",flexDirection:"column",gap:7}}>
+        {squadDupeCount>0&&<div style={{padding:"10px 13px",background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.22)",borderRadius:9}}>
+          <div style={{fontSize:13,fontWeight:700,color:"#ef4444",marginBottom:2}}>&#128683; {squadDupeCount} already in squad</div>
+          <div style={{fontSize:12,color:"rgba(255,255,255,0.4)"}}>These players are already in your current squad. Skip or add again.</div>
+        </div>}
+        {dupeCount>0&&<div style={{padding:"10px 13px",background:"rgba(251,191,36,0.07)",border:"1px solid rgba(251,191,36,0.22)",borderRadius:9}}>
+          <div style={{fontSize:13,fontWeight:700,color:"#fbbf24",marginBottom:2}}>&#128190; {dupeCount} profile{dupeCount!==1?"s":""} found</div>
+          <div style={{fontSize:12,color:"rgba(255,255,255,0.4)"}}>Saved skill ratings found. Choose which to use.</div>
+        </div>}
+      </div>
+
+      {/* Bulk actions */}
+      {(dupeCount>1||squadDupeCount>1)&&<div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+        {dupeCount>1&&<>
+          <button className="btn" onClick={function(){setDecisions(review.pending.map(function(x){return x.inSquad?"skip":x.savedProfile?"saved":"new";}));}} style={{
+            flex:1,padding:"8px",borderRadius:7,fontSize:12,background:"rgba(0,255,136,0.08)",color:"#00ff88",border:"1px solid rgba(0,255,136,0.2)"}}>&#128190; All Saved</button>
+          <button className="btn" onClick={function(){setDecisions(review.pending.map(function(x){return x.inSquad?"skip":"new";}));}} style={{
+            flex:1,padding:"8px",borderRadius:7,fontSize:12,background:"rgba(96,165,250,0.08)",color:"#60a5fa",border:"1px solid rgba(96,165,250,0.2)"}}>&#128221; All Default</button>
+        </>}
+        {squadDupeCount>1&&<button className="btn" onClick={function(){setDecisions(review.pending.map(function(x){return x.inSquad?"skip":decisions[review.pending.indexOf(x)];}));}} style={{
+          flex:1,padding:"8px",borderRadius:7,fontSize:12,background:"rgba(239,68,68,0.08)",color:"#ef4444",border:"1px solid rgba(239,68,68,0.2)"}}>&#128683; Skip All In Squad</button>}
+      </div>}
+
+      {/* Player rows */}
+      <div style={{display:"flex",flexDirection:"column",gap:7}}>
+        {review.pending.map(function(x,i){
+          var d=decisions[i];
+          var isSquadDupe=x.inSquad;
+          var hasProfile=!!x.savedProfile&&!isSquadDupe;
+          var borderColor=isSquadDupe?"rgba(239,68,68,0.25)":hasProfile?"rgba(251,191,36,0.2)":"rgba(255,255,255,0.07)";
+
+          return <div key={i} style={{borderRadius:10,overflow:"hidden",border:"1px solid "+borderColor}}>
+            {/* Name row */}
+            <div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",
+              background:isSquadDupe?"rgba(239,68,68,0.06)":hasProfile?"rgba(251,191,36,0.05)":"rgba(255,255,255,0.02)"}}>
+              <span style={{fontSize:10,color:"rgba(255,255,255,0.22)",minWidth:18,textAlign:"right"}}>{i+1}</span>
+              <span style={{flex:1,fontSize:14,fontWeight:700,
+                color:isSquadDupe?"#ef4444":hasProfile?"#fbbf24":"rgba(255,255,255,0.8)"}}>{x.name}</span>
+              {isSquadDupe&&<span style={{fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:20,
+                background:"rgba(239,68,68,0.15)",color:"#ef4444",border:"1px solid rgba(239,68,68,0.3)",whiteSpace:"nowrap"}}>In Squad</span>}
+              {hasProfile&&<span style={{fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:20,
+                background:"rgba(251,191,36,0.15)",color:"#fbbf24",border:"1px solid rgba(251,191,36,0.3)",whiteSpace:"nowrap"}}>&#128190; Profile</span>}
+            </div>
+
+            {/* Squad duplicate options */}
+            {isSquadDupe&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0,borderTop:"1px solid rgba(255,255,255,0.06)"}}>
+              <button className="btn" onClick={function(){setDecision(i,"skip");}} style={{
+                padding:"10px 8px",borderRadius:0,borderRight:"1px solid rgba(255,255,255,0.06)",
+                background:d==="skip"?"rgba(239,68,68,0.12)":"rgba(255,255,255,0.02)",
+                color:d==="skip"?"#ef4444":"rgba(255,255,255,0.4)",border:"none",fontSize:12,fontWeight:700}}>
+                {d==="skip"?"&#10003; ":""}Skip (already in squad)
+              </button>
+              <button className="btn" onClick={function(){setDecision(i,"new");}} style={{
+                padding:"10px 8px",borderRadius:0,
+                background:d==="new"?"rgba(96,165,250,0.12)":"rgba(255,255,255,0.02)",
+                color:d==="new"?"#60a5fa":"rgba(255,255,255,0.4)",border:"none",fontSize:12,fontWeight:700}}>
+                {d==="new"?"&#10003; ":""}Add anyway
+              </button>
+            </div>}
+
+            {/* Profile match options */}
+            {hasProfile&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0,borderTop:"1px solid rgba(255,255,255,0.06)"}}>
+              <button className="btn" onClick={function(){setDecision(i,"saved");}} style={{
+                padding:"11px 8px",borderRadius:0,borderRight:"1px solid rgba(255,255,255,0.06)",
+                background:d==="saved"?"rgba(0,255,136,0.11)":"rgba(255,255,255,0.02)",
+                color:d==="saved"?"#00ff88":"rgba(255,255,255,0.4)",border:"none"}}>
+                <div style={{fontSize:11,fontWeight:700,marginBottom:3}}>{d==="saved"?"&#10003; ":""}Saved Profile</div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
+                  <span style={{fontSize:8,fontWeight:800,padding:"1px 4px",borderRadius:3,
+                    background:(PCOLS[x.savedProfile.position]||"#8b5cf6")+"33",
+                    color:PCOLS[x.savedProfile.position]||"#8b5cf6"}}>{x.savedProfile.position}</span>
+                  <SkillDots value={x.savedProfile.skill} size={7} color="#00ff88"/>
+                  <span style={{fontSize:12,fontWeight:800,color:"#00ff88"}}>{x.savedProfile.skill}</span>
+                </div>
+              </button>
+              <button className="btn" onClick={function(){setDecision(i,"new");}} style={{
+                padding:"11px 8px",borderRadius:0,
+                background:d==="new"?"rgba(96,165,250,0.11)":"rgba(255,255,255,0.02)",
+                color:d==="new"?"#60a5fa":"rgba(255,255,255,0.4)",border:"none"}}>
+                <div style={{fontSize:11,fontWeight:700,marginBottom:3}}>{d==="new"?"&#10003; ":""}Import Default</div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
+                  <span style={{fontSize:8,fontWeight:800,padding:"1px 4px",borderRadius:3,
+                    background:(PCOLS[x.position]||"#8b5cf6")+"33",
+                    color:PCOLS[x.position]||"#8b5cf6"}}>{x.position}</span>
+                  <SkillDots value={x.skill} size={7} color="#60a5fa"/>
+                  <span style={{fontSize:12,fontWeight:800,color:"#60a5fa"}}>{x.skill}</span>
+                </div>
+              </button>
+            </div>}
+
+            {/* Clean new player — no action needed */}
+            {!isSquadDupe&&!hasProfile&&<div style={{padding:"7px 12px",borderTop:"1px solid rgba(255,255,255,0.05)",
+              display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.02)"}}>
+              <span style={{fontSize:10,color:"rgba(255,255,255,0.22)"}}>New —</span>
+              <span style={{fontSize:8,fontWeight:800,padding:"1px 4px",borderRadius:3,
+                background:(PCOLS[x.position]||"#8b5cf6")+"33",color:PCOLS[x.position]||"#8b5cf6"}}>{x.position}</span>
+              <SkillDots value={x.skill} size={7} color="rgba(255,255,255,0.3)"/>
+              <span style={{fontSize:11,color:"rgba(255,255,255,0.3)"}}>{x.skill}</span>
+            </div>}
+          </div>;
+        })}
+      </div>
+
+      <button className="btn" onClick={handleConfirm} style={{
+        padding:"15px",borderRadius:11,fontSize:15,fontWeight:800,marginTop:4,
+        background:accentColor,color:"#080c10",border:"none",
+        boxShadow:"0 0 20px "+accentColor+"44"}}>
+        &#10003; CONFIRM IMPORT
+      </button>
+    </div>
+  </Sheet>;
+}
+
+// ─── MAIN APP ────────────────────────────────────────────────
+const STORAGE_KEY="team-selector-v1";
+const PROFILE_DB_KEY="team-selector-profiles-v1";
+
+function loadSaved(){
+  try{var raw=localStorage.getItem(STORAGE_KEY);if(raw)return JSON.parse(raw);}catch(e){}
+  return null;
+}
+
+// Profile DB — separate from squad lists, persists through Clear all
+function loadProfileDB(){
+  try{var raw=localStorage.getItem(PROFILE_DB_KEY);if(raw)return JSON.parse(raw);}catch(e){}
+  return {}; // {normalisedName: {name, position, skill, updatedAt}}
+}
+function saveProfileDB(db){
+  try{localStorage.setItem(PROFILE_DB_KEY,JSON.stringify(db));}catch(e){}
+}
+function normaliseName(name){
+  // Collapse multiple spaces, trim, lowercase — makes matching robust
+  return (name||"").trim().replace(/\s+/g," ").toLowerCase();
+}
+function upsertProfile(db,player){
+  if(!player||!player.name||!player.name.trim())return db;
+  var key=normaliseName(player.name);
+  db[key]={name:player.name.trim(),position:player.position||"ANY",skill:player.skill||3,updatedAt:Date.now()};
+  return db;
+}
+function lookupProfile(db,name){
+  if(!db||!name)return null;
+  return db[normaliseName(name)]||null;
+}
+
+function App(){
+  var saved=loadSaved();
+  const [profileDB,setProfileDB]=useState(loadProfileDB);
+  const [saveStatus,setSaveStatus]=useState("saved"); // "saved"|"saving"|"error"
+
+  const [sportId,setSportId]=useState(saved?saved.sportId:"football");
+  const [showSportPicker,setShowSportPicker]=useState(saved?false:true);
+  const [lists,setLists]=useState(saved&&saved.lists?saved.lists:[{id:1,name:"My Squad",players:[]}]);
+  const [activeListId,setActiveListId]=useState(saved?saved.activeListId:1);
+  const [playersAside,setPlayersAside]=useState(saved?saved.playersAside:11);
+  const [numTeams,setNumTeams]=useState(saved?saved.numTeams:2);
+  const [customNumTeams,setCustomNumTeams]=useState("");
+  const [teams,setTeams]=useState(null);
+  const [sheet,setSheet]=useState(null);
+  const [form,setForm]=useState({name:"",position:"ANY",skill:3,editId:null});
+  const [bulkText,setBulkText]=useState("");
+  const [bulkPos,setBulkPos]=useState("ANY");
+  const [bulkSkill,setBulkSkill]=useState(3);
+  const [newListName,setNewListName]=useState("");
+  const [flash,setFlash]=useState(null);
+  const [editingTeams,setEditingTeams]=useState(false);
+  const [exportText,setExportText]=useState("");
+  const [showExport,setShowExport]=useState(false);
+  const [moveModal,setMoveModal]=useState(null);
+  const [tpForm,setTpForm]=useState(null);
+  const [view,setView]=useState("squad");
+  const [showRules,setShowRules]=useState(false);
+  const [jerseySheet,setJerseySheet]=useState(null);
+  const [showProfiles,setShowProfiles]=useState(false);
+  const dragRef=useRef({player:null,fromTeam:null});
+  const [dragOver,setDragOver]=useState(null);
+
+  // Auto-save to localStorage whenever key state changes
+  const saveTimeout=useRef(null);
+  function scheduleSave(newLists,newSportId,newActiveListId,newPlayersAside,newNumTeams){
+    setSaveStatus("saving");
+    clearTimeout(saveTimeout.current);
+    saveTimeout.current=setTimeout(function(){
+      try{
+        localStorage.setItem(STORAGE_KEY,JSON.stringify({
+          lists:newLists,sportId:newSportId,activeListId:newActiveListId,
+          playersAside:newPlayersAside,numTeams:newNumTeams,savedAt:Date.now()
+        }));
+        setSaveStatus("saved");
+      }catch(e){setSaveStatus("error");}
+    },400);
+  }
+
+  const {useEffect}=React;
+
+  // Seed profile DB from ALL players in ALL lists on startup and whenever lists change
+  // This ensures existing players are always in the DB even if added before this feature
+  useEffect(function(){
+    setProfileDB(function(db){
+      var updated=Object.assign({},db);
+      var changed=false;
+      lists.forEach(function(l){
+        (l.players||[]).forEach(function(p){
+          var key=normaliseName(p.name);
+          // Only upsert if not already in DB (don't overwrite manually edited profiles)
+          if(!updated[key]){
+            upsertProfile(updated,p);
+            changed=true;
+          }
+        });
+      });
+      if(changed){
+        try{localStorage.setItem(PROFILE_DB_KEY,JSON.stringify(updated));}catch(e){}
+        return updated;
+      }
+      return db;
+    });
+  },[lists]);
+
+  // Wrap state setters to also trigger save
+  function setListsAndSave(fn){
+    setLists(function(prev){
+      var next=typeof fn==="function"?fn(prev):fn;
+      scheduleSave(next,sportId,activeListId,playersAside,numTeams);
+      return next;
+    });
+  }
+
+  // Sync one or more players into the persistent profile DB
+  function syncToProfileDB(playersArr){
+    setProfileDB(function(db){
+      var updated=Object.assign({},db);
+      playersArr.forEach(function(p){if(p&&p.name)upsertProfile(updated,p);});
+      try{
+        localStorage.setItem(PROFILE_DB_KEY,JSON.stringify(updated));
+        setSaveStatus("saved");
+      }catch(e){setSaveStatus("error");}
+      return updated;
+    });
+  }
+
+  var sport=SPORTS[sportId]||SPORTS.football;
+  var accentColor=sport.color;
+
+  function selectSport(sid){
+    var s=SPORTS[sid];
+    setSportId(sid);
+    setPlayersAside(s.defaultAside);
+    setNumTeams(s.defaultTeams);
+    setTeams(null);setEditingTeams(false);setShowExport(false);
+    setShowSportPicker(false);setView("squad");
+    scheduleSave(lists,sid,activeListId,s.defaultAside,s.defaultTeams);
+    flash2("Sport set to "+s.label+"!");
+  }
+
+  function flash2(msg,type){setFlash({msg,type:type||"ok"});setTimeout(function(){setFlash(null);},2200);}
+
+  // Bulletproof active list — never undefined, always has a players array
+  var safeList=lists&&lists.length>0?lists:([{id:1,name:"My Squad",players:[]}]);
+  var activeList=safeList.find(function(l){return l.id===activeListId;})||safeList[0];
+  var players=(activeList&&activeList.players)||[];
+
+  function updPlayers(fn){
+    setListsAndSave(function(ls){return ls.map(function(l){return l.id===activeListId?Object.assign({},l,{players:fn(l.players)}):l;});});
+    setTeams(null);setEditingTeams(false);setShowExport(false);
+  }
+  function savePlayer(){
+    if(!form.name.trim())return;
+    var playerData={name:form.name.trim(),position:form.position,skill:form.skill};
+    // Block duplicate names in the current squad (except when editing existing player)
+    var normNew=normaliseName(playerData.name);
+    var isDupe=players.some(function(p){
+      return normaliseName(p.name)===normNew&&p.id!==form.editId;
+    });
+    if(isDupe){flash2(playerData.name+" is already in the squad!","err");return;}
+    if(form.editId!=null){
+      updPlayers(function(ps){return ps.map(function(p){return p.id===form.editId?Object.assign({},p,playerData):p;});});
+      flash2("Updated!");
+    }else{
+      updPlayers(function(ps){return ps.concat([Object.assign({id:nid++},playerData)]);});
+      flash2("Player added!");
+    }
+    syncToProfileDB([playerData]);
+    setForm({name:"",position:"ANY",skill:3,editId:null});setSheet(null);
+  }
+  function removePlayer(id){updPlayers(function(ps){return ps.filter(function(p){return p.id!==id;});});}
+  function startEdit(pl){setForm({name:pl.name,position:pl.position,skill:pl.skill,editId:pl.id});setSheet("editPlayer");}
+
+  // Scan current squad for duplicate names and remove extras (keep first occurrence)
+  function cleanDuplicates(){
+    var seen={};var removed=0;
+    updPlayers(function(ps){
+      return ps.filter(function(p){
+        var key=normaliseName(p.name);
+        if(seen[key]){removed++;return false;}
+        seen[key]=true;return true;
+      });
+    });
+    if(removed>0)flash2(removed+" duplicate"+(removed>1?"s":"")+" removed!");
+    else flash2("No duplicates found ✓");
+  }
+
+  const [duplicateReview,setDuplicateReview]=useState(null);
+
+  function parseBulk(){
+    var parsed=bulkText.split("\n").map(function(l){return l.trim();}).filter(Boolean)
+      .map(function(l){return l.replace(/^\d+[\.\)\-\s]+/,"").trim();}).filter(Boolean);
+    if(!parsed.length)return;
+
+    // Dedupe within the import list itself (keep first occurrence of each name)
+    var seenInList={};
+    var deduped=[];
+    parsed.forEach(function(name){
+      var key=normaliseName(name);
+      if(!seenInList[key]){seenInList[key]=true;deduped.push(name);}
+    });
+    var removedFromList=parsed.length-deduped.length;
+
+    var withMatches=deduped.map(function(name){
+      var savedProfile=lookupProfile(profileDB,name);
+      var inSquad=players.some(function(p){return normaliseName(p.name)===normaliseName(name);});
+      return {name:name,position:savedProfile?savedProfile.position:bulkPos,skill:savedProfile?savedProfile.skill:bulkSkill,savedProfile:savedProfile,inSquad:inSquad};
+    });
+
+    var hasAnything=withMatches.some(function(x){return x.savedProfile||x.inSquad;});
+    if(removedFromList>0)flash2(removedFromList+" duplicate"+(removedFromList>1?"s":"")+" removed from import list");
+
+    if(hasAnything){
+      setDuplicateReview({pending:withMatches,bulkPos:bulkPos,bulkSkill:bulkSkill,removedFromList:removedFromList});
+      setSheet("duplicateReview");
+    }else{
+      updPlayers(function(ps){return ps.concat(withMatches.map(function(x){return {id:nid++,name:x.name,position:x.position,skill:x.skill};}));});
+      syncToProfileDB(withMatches);
+      flash2(deduped.length+" players imported!"+(removedFromList>0?" ("+removedFromList+" dupes removed)":""));
+      setBulkText("");setSheet(null);
+    }
+  }
+
+  function confirmDuplicateReview(decisions){
+    // decisions = array of {name, position, skill, skip}
+    var toAdd=decisions.filter(function(x){return !x.skip;});
+    updPlayers(function(ps){return ps.concat(toAdd.map(function(x){return {id:nid++,name:x.name,position:x.position,skill:x.skill};}));});
+    syncToProfileDB(toAdd);
+    var skipped=decisions.filter(function(x){return x.skip;}).length;
+    flash2(toAdd.length+" added"+(skipped?" · "+skipped+" skipped":"")+"!");
+    setBulkText("");setDuplicateReview(null);setSheet(null);
+  }
+  function createList(){
+    if(!newListName.trim())return;
+    var id=nlid++;
+    setListsAndSave(function(ls){return ls.concat([{id:id,name:newListName.trim(),players:[]}]);});
+    setActiveListId(id);setNewListName("");setSheet(null);setTeams(null);flash2("List created!");
+  }
+  function renameList(){
+    if(!newListName.trim())return;
+    setListsAndSave(function(ls){return ls.map(function(l){return l.id===activeListId?Object.assign({},l,{name:newListName.trim()}):l;});});
+    setNewListName("");setSheet(null);flash2("Renamed!");
+  }
+  function deleteList(id){
+    // Always keep at least one list
+    var r=lists.filter(function(l){return l.id!==id;});
+    if(r.length===0){
+      // Safety net — never allow empty lists array
+      r=[{id:nlid++,name:"My Squad",players:[]}];
+    }
+    // If we deleted the active list, switch to first remaining
+    var newActiveId=id===activeListId?r[0].id:activeListId;
+    setListsAndSave(r);
+    setActiveListId(newActiveId);
+    setTeams(null);setEditingTeams(false);setShowExport(false);
+  }
+
+  var effectiveNumTeams=numTeams;
+  var KEY_POSITIONS=["GK","Setter","Libero","PG"];
+
+  function generateTeams(){
+    if(players.length<effectiveNumTeams)return;
+    var step=Math.max(1,Math.floor(JERSEY_PRESETS.length/effectiveNumTeams));
+    var result=[];
+    for(var i=0;i<effectiveNumTeams;i++){
+      var prevName=teams&&teams[i]?teams[i].name:"Team "+(i+1);
+      var prevJersey=teams&&teams[i]&&teams[i].jersey?teams[i].jersey:JERSEY_PRESETS[(i*step)%JERSEY_PRESETS.length].hex;
+      result.push({name:prevName,color:TCOLS[i%TCOLS.length],jersey:prevJersey,players:[]});
+    }
+
+    function teamSkill(t){
+      return t.players.reduce(function(s,p){return s+p.skill;},0);
+    }
+    function teamPosCount(t,pos){
+      return t.players.filter(function(p){return p.position===pos;}).length;
+    }
+
+    // STEP 1: Assign key-position players with hard spread constraint
+    function assignKeyPlayer(p){
+      // Find the minimum number of this position any team has
+      var counts=result.map(function(t){return teamPosCount(t,p.position);});
+      var minCount=Math.min.apply(null,counts);
+      // Only eligible teams are those at the minimum count
+      var eligible=[];
+      result.forEach(function(t,idx){if(counts[idx]===minCount)eligible.push({idx:idx,skill:teamSkill(t)});});
+      // Among eligible, pick lowest skill total for balance
+      eligible.sort(function(a,b){return a.skill-b.skill;});
+      result[eligible[0].idx].players.push(p);
+    }
+
+    // STEP 2: Assign non-key players to lowest skill team
+    function assignRegularPlayer(p){
+      var minIdx=0;var minS=teamSkill(result[0]);
+      result.forEach(function(t,idx){var s=teamSkill(t);if(s<minS){minS=s;minIdx=idx;}});
+      result[minIdx].players.push(p);
+    }
+
+    var allSorted=players.map(function(p){return Object.assign({},p);});
+    allSorted.sort(function(a,b){return b.skill-a.skill;});
+
+    var keyPlayers=allSorted.filter(function(p){return KEY_POSITIONS.indexOf(p.position)!==-1;});
+    var otherPlayers=allSorted.filter(function(p){return KEY_POSITIONS.indexOf(p.position)===-1;});
+
+    keyPlayers.forEach(function(p){assignKeyPlayer(p);});
+    otherPlayers.forEach(function(p){assignRegularPlayer(p);});
+
+    // STEP 3: POST-GENERATION SWAP PASS
+    // For each key position, if any team has 2+ of a position and another team has 0,
+    // swap the excess player with a non-key player from the deficient team
+    KEY_POSITIONS.forEach(function(pos){
+      var maxAllowed=Math.ceil(keyPlayers.filter(function(p){return p.position===pos;}).length/effectiveNumTeams);
+      // Repeat until no more fixes needed
+      var changed=true;
+      var passes=0;
+      while(changed&&passes<10){
+        changed=false;passes++;
+        for(var ti=0;ti<result.length;ti++){
+          var posCount=teamPosCount(result[ti],pos);
+          if(posCount>maxAllowed){
+            // This team has too many — find a team with fewer
+            for(var tj=0;tj<result.length;tj++){
+              if(tj===ti)continue;
+              if(teamPosCount(result[tj],pos)<teamPosCount(result[ti],pos)-1){
+                // Swap: move one key-pos player from ti to tj, move a non-key from tj to ti
+                var excess=result[ti].players.filter(function(p){return p.position===pos;});
+                var swapOut=excess[excess.length-1]; // move weakest GK
+                var swapCandidates=result[tj].players.filter(function(p){return KEY_POSITIONS.indexOf(p.position)===-1;});
+                if(swapCandidates.length>0){
+                  var swapIn=swapCandidates[0];
+                  result[ti].players=result[ti].players.filter(function(p){return p.id!==swapOut.id;});
+                  result[tj].players=result[tj].players.filter(function(p){return p.id!==swapIn.id;});
+                  result[tj].players.push(swapOut);
+                  result[ti].players.push(swapIn);
+                  changed=true;
+                }else{
+                  // No non-key to swap — just move the key player
+                  result[ti].players=result[ti].players.filter(function(p){return p.id!==swapOut.id;});
+                  result[tj].players.push(swapOut);
+                  changed=true;
+                }
+                break;
+              }
+            }
+          }
+        }
+      }
+    });
+
+    setTeams(result);setEditingTeams(false);setShowExport(false);setView("teams");
+    flash2("Teams generated!");
+  }
+
+  function updTeams(fn){setTeams(function(ts){return fn(ts.map(function(t){return Object.assign({},t,{players:t.players.slice()});}));});}
+  function changeJersey(ti,hex){updTeams(function(ts){ts[ti].jersey=hex;return ts;});}
+
+  // Reshuffle — keep same teams/jerseys but randomly redistribute players
+  function reshuffleTeams(){
+    if(!teams)return;
+    var allPlayers=teams.reduce(function(a,t){return a.concat(t.players);},[]); 
+    // Fisher-Yates shuffle
+    for(var i=allPlayers.length-1;i>0;i--){
+      var j=Math.floor(Math.random()*(i+1));
+      var tmp=allPlayers[i];allPlayers[i]=allPlayers[j];allPlayers[j]=tmp;
+    }
+    updTeams(function(ts){
+      ts.forEach(function(t){t.players=[];});
+      allPlayers.forEach(function(p,i){
+        ts[i%ts.length].players.push(Object.assign({},p));
+      });
+      return ts;
+    });
+    flash2("Teams reshuffled!");
+  }
+  function removeFromTeam(ti,pid){updTeams(function(ts){ts[ti].players=ts[ti].players.filter(function(p){return p.id!==pid;});return ts;});}
+  function addToTeam(ti,player){updTeams(function(ts){ts[ti].players=ts[ti].players.concat([Object.assign({},player)]);return ts;});}
+  function movePlayer(from,to,pid){
+    updTeams(function(ts){
+      var p=ts[from].players.find(function(x){return x.id===pid;});
+      if(!p)return ts;
+      ts[from].players=ts[from].players.filter(function(x){return x.id!==pid;});
+      ts[to].players=ts[to].players.concat([Object.assign({},p)]);
+      return ts;
+    });flash2("Moved!");
+  }
+  function renameTeam(ti,name){updTeams(function(ts){ts[ti].name=name;return ts;});}
+  function editTp(ti,pl){setTpForm({teamIdx:ti,playerId:pl.id,form:{name:pl.name,position:pl.position,skill:pl.skill}});setSheet("editTp");}
+  function saveTp(){
+    if(!tpForm)return;
+    var ti=tpForm.teamIdx,pid=tpForm.playerId,f=tpForm.form;
+    updTeams(function(ts){ts[ti].players=ts[ti].players.map(function(p){return p.id===pid?Object.assign({},p,f):p;});return ts;});
+    setListsAndSave(function(ls){return ls.map(function(l){return l.id===activeListId?Object.assign({},l,{players:l.players.map(function(p){return p.id===pid?Object.assign({},p,f):p;})}):l;});});
+    syncToProfileDB([f]);
+    flash2("Updated!");setTpForm(null);setSheet(null);
+  }
+  function buildExport(){
+    if(!teams)return"";
+    var used=new Set(teams.reduce(function(a,t){return a.concat(t.players.map(function(p){return p.id;}));},[]));
+    var benchP=players.filter(function(p){return !used.has(p.id);});
+    // Map hex colours to closest emoji colour square
+    var colourEmojis={
+      "#e63946":"🟥","#1d7ae0":"🟦","#2dc653":"🟩","#f4d03f":"🟨",
+      "#f97316":"🟧","#9b59b6":"🟪","#f0f0f0":"⬜","#1a1a2e":"⬛",
+      "#e91e8c":"🟥","#00bcd4":"🟦","#800000":"🟥","#001f5b":"🟦",
+      "#b5e61d":"🟩","#56cfe1":"🟦","#ffd700":"🟨","#8b4513":"🟫"
+    };
+    function getEmoji(hex){return hex?(colourEmojis[hex]||"🔵"):"⚪";}
+    var out="";
+    teams.forEach(function(t){
+      var jerseyName=t.jersey?(JERSEY_PRESETS.find(function(p){return p.hex===t.jersey;})||{name:t.jersey}).name:"";
+      var em=getEmoji(t.jersey);
+      out+=em+" "+t.name+(jerseyName?" — "+jerseyName+" Jersey":"")+"\n";
+      t.players.forEach(function(p,i){out+="  "+(i+1)+". "+p.name+"\n";});
+      out+="\n";
+    });
+    if(benchP.length){
+      out+="🔄 Bench\n";
+      benchP.forEach(function(p,i){out+="  "+(i+1)+". "+p.name+"\n";});
+    }
+    return out.trim();
+  }
+  function openExport(){setExportText(buildExport());setShowExport(true);}
+  function copyClip(){
+    if(navigator.clipboard){navigator.clipboard.writeText(exportText).then(function(){flash2("Copied!");}).catch(function(){flash2("Failed","err");});}
+    else{flash2("Not supported","err");}
+  }
+
+  var canGen=players.length>=effectiveNumTeams;
+  var usedSet=teams?new Set(teams.reduce(function(a,t){return a.concat(t.players.map(function(p){return p.id;}));},[])):new Set();
+  var bench=teams?players.filter(function(p){return !usedSet.has(p.id);}):[];
+
+  // position colours lookup
+  var PCOLS={GK:"#f59e0b",DEF:"#3b82f6",MID:"#10b981",FWD:"#ef4444",ANY:"#8b5cf6",
+    PG:"#f59e0b",SG:"#3b82f6",SF:"#10b981",PF:"#ef4444",C:"#60a5fa",
+    Setter:"#f59e0b",Libero:"#3b82f6",OH:"#10b981",MB:"#ef4444",OPP:"#a78bfa",
+    Singles:"#60a5fa",Doubles:"#fbbf24"};
+
+  // ─── SPORT PICKER SCREEN ───────────────────────────────────
+  if(showSportPicker){
+    return <div style={{minHeight:"100vh",background:"#080c10",padding:"0 0 40px"}}>
+      {flash&&<div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",zIndex:999,padding:"11px 22px",borderRadius:30,fontWeight:800,fontSize:14,whiteSpace:"nowrap",
+        background:"#00ff88",color:"#080c10",animation:"flashA 2.2s ease forwards",pointerEvents:"none",boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>{flash.msg}</div>}
+      <div style={{background:"linear-gradient(135deg,#0d1f0f,#080c10 60%,#0a0d1a)",borderBottom:"1px solid rgba(255,255,255,0.08)",padding:"22px 18px 18px"}}>
+        <div style={{fontSize:11,color:"rgba(255,255,255,0.3)",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:4}}>Team Selector</div>
+        <h1 style={{fontSize:26,fontWeight:700,color:"#fff",letterSpacing:"0.05em"}}>Choose <span style={{color:"#00ff88"}}>Your Sport</span></h1>
+        <div style={{fontSize:14,color:"rgba(255,255,255,0.35)",marginTop:4}}>Settings will adjust automatically</div>
+      </div>
+      <div style={{padding:"18px 14px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        {Object.values(SPORTS).map(function(s){return <button key={s.id} className="btn sport-card" onClick={function(){selectSport(s.id);}} style={{
+          padding:"20px 14px",borderRadius:14,background:sportId===s.id?"rgba(255,255,255,0.06)":"rgba(255,255,255,0.03)",
+          border:sportId===s.id?"1px solid "+s.color+"66":"1px solid rgba(255,255,255,0.08)",
+          textAlign:"left",display:"flex",flexDirection:"column",gap:8,transition:"all 0.18s",
+          boxShadow:sportId===s.id?"0 0 20px "+s.color+"22":"none"}}>
+          <div style={{fontSize:32}}>{s.emoji}</div>
+          <div style={{fontSize:16,fontWeight:700,color:sportId===s.id?s.color:"rgba(255,255,255,0.8)",letterSpacing:"0.03em"}}>{s.label}</div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.3)",fontWeight:500}}>{s.defaultAside}v{s.defaultAside} &bull; {Object.keys(SPORTS).indexOf(s.id)<4?"Team":"Individual/Pair"}</div>
+        </button>;})}
+      </div>
+    </div>;
+  }
+
+  // ─── MAIN APP SCREEN ──────────────────────────────────────
+  return <div style={{minHeight:"100vh",background:"#080c10",paddingBottom:90}}>
+
+    {flash&&<div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",zIndex:999,padding:"11px 22px",borderRadius:30,fontWeight:800,fontSize:14,whiteSpace:"nowrap",
+      background:flash.type==="err"?"#ef4444":"#00ff88",color:"#080c10",animation:"flashA 2.2s ease forwards",pointerEvents:"none",boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>{flash.msg}</div>}
+
+    {/* HEADER */}
+    <div style={{background:"linear-gradient(135deg,#0a1a0d,#080c10 55%,#0a0d1a)",borderBottom:"1px solid rgba(255,255,255,0.08)",padding:"14px 16px 12px",position:"sticky",top:0,zIndex:100}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <button className="btn" onClick={function(){setShowSportPicker(true);}} style={{
+            background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,
+            padding:"6px 10px",fontSize:20,lineHeight:1}}>{sport.emoji}</button>
+          <div>
+            <div style={{fontSize:18,fontWeight:700,letterSpacing:"0.06em",color:"#fff",textTransform:"uppercase",lineHeight:1}}>
+              <span style={{color:accentColor}}>{sport.label}</span> Selector
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2}}>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.28)",letterSpacing:"0.1em",textTransform:"uppercase"}}>
+                {playersAside}v{playersAside} &bull; {effectiveNumTeams} teams
+              </div>
+              {/* Save status pill */}
+              <div style={{display:"flex",alignItems:"center",gap:4,padding:"1px 7px",borderRadius:20,
+                background:saveStatus==="error"?"rgba(239,68,68,0.15)":saveStatus==="saving"?"rgba(251,191,36,0.12)":"rgba(0,255,136,0.1)",
+                border:saveStatus==="error"?"1px solid rgba(239,68,68,0.3)":saveStatus==="saving"?"1px solid rgba(251,191,36,0.25)":"1px solid rgba(0,255,136,0.2)"}}>
+                <div style={{width:5,height:5,borderRadius:"50%",
+                  background:saveStatus==="error"?"#ef4444":saveStatus==="saving"?"#fbbf24":"#00ff88",
+                  boxShadow:saveStatus==="saving"?"0 0 6px #fbbf24":""}}/>
+                <span style={{fontSize:9,fontWeight:700,letterSpacing:"0.06em",
+                  color:saveStatus==="error"?"#ef4444":saveStatus==="saving"?"#fbbf24":"#00ff88"}}>
+                  {saveStatus==="error"?"SAVE FAILED":saveStatus==="saving"?"SAVING...":"SAVED"}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:7,alignItems:"center"}}>
+          <button className="btn" onClick={function(){setShowProfiles(true);}} style={{
+            background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,
+            padding:"7px 11px",fontSize:12,color:"rgba(255,255,255,0.55)",letterSpacing:"0.05em"}}>&#128100; Profiles</button>
+          <button className="btn" onClick={function(){setShowRules(true);}} style={{
+            background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,
+            padding:"7px 11px",fontSize:12,color:"rgba(255,255,255,0.55)",letterSpacing:"0.05em"}}>&#9432; Rules</button>
+          <button className="btn" onClick={function(){setNewListName(activeList.name);setSheet("renameList");}} style={{
+            background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,
+            padding:"7px 10px",fontSize:12,color:"rgba(255,255,255,0.55)",maxWidth:110,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+            {activeList.name} &#9998;</button>
+        </div>
+      </div>
+    </div>
+
+    {/* TAB BAR */}
+    <div style={{display:"flex",background:"rgba(255,255,255,0.025)",borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
+      {[{id:"squad",label:"Squad ("+players.length+")"},{id:"teams",label:teams?"Teams ("+teams.length+")":"Teams"}].map(function(tab){
+        return <button key={tab.id} className="btn" onClick={function(){setView(tab.id);}} style={{
+          flex:1,padding:"13px",fontSize:14,fontWeight:700,letterSpacing:"0.05em",background:"transparent",
+          color:view===tab.id?accentColor:"rgba(255,255,255,0.38)",
+          borderBottom:view===tab.id?"2.5px solid "+accentColor:"2.5px solid transparent"}}>{tab.label}</button>;
+      })}
+    </div>
+
+    {/* ═══ SQUAD VIEW ═══ */}
+    {view==="squad"&&<div style={{padding:"14px 14px 0"}}>
+
+      {/* Config */}
+      <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"13px 14px",marginBottom:14}}>
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:10,letterSpacing:"0.11em",textTransform:"uppercase",color:"rgba(255,255,255,0.38)",fontWeight:600,marginBottom:8}}>Players per team</div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            {Array.from({length:sport.maxAside-sport.minAside+1},function(_,i){return i+sport.minAside;}).map(function(n){return <button key={n} className="btn" onClick={function(){setPlayersAside(n);setTeams(null);}} style={{
+              padding:"7px 11px",borderRadius:7,fontSize:14,minHeight:38,
+              background:playersAside===n?accentColor:"rgba(255,255,255,0.07)",
+              color:playersAside===n?"#080c10":"rgba(255,255,255,0.55)",
+              border:playersAside===n?"none":"1px solid rgba(255,255,255,0.1)"}}>{n}</button>;})}
+          </div>
+        </div>
+        <div>
+          <div style={{fontSize:10,letterSpacing:"0.11em",textTransform:"uppercase",color:"rgba(255,255,255,0.38)",fontWeight:600,marginBottom:8}}>Number of teams</div>
+          <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+            {[2,3,4,5,6,8,10].map(function(n){return <button key={n} className="btn" onClick={function(){setNumTeams(n);setCustomNumTeams("");setTeams(null);}} style={{
+              padding:"7px 11px",borderRadius:7,fontSize:14,minHeight:38,
+              background:numTeams===n&&customNumTeams===""?"#fbbf24":"rgba(255,255,255,0.07)",
+              color:numTeams===n&&customNumTeams===""?"#080c10":"rgba(255,255,255,0.55)",
+              border:numTeams===n&&customNumTeams===""?"none":"1px solid rgba(255,255,255,0.1)"}}>{n}</button>;})}
+            <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:7,overflow:"hidden"}}>
+              <input value={customNumTeams} onChange={function(e){
+                var v=e.target.value.replace(/[^0-9]/g,"");
+                setCustomNumTeams(v);
+                if(v&&parseInt(v)>=2){setNumTeams(parseInt(v));setTeams(null);}
+              }} placeholder="Custom" style={{width:72,padding:"7px 10px",background:"transparent",border:"none",color:"#fbbf24",fontSize:14,fontWeight:700}}/>
+            </div>
+          </div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.25)",marginTop:6}}>Ideal: {effectiveNumTeams*playersAside} players total &bull; {players.length} in squad</div>
+        </div>
+      </div>
+
+      {/* Lists */}
+      <div style={{display:"flex",gap:6,marginBottom:12,overflowX:"auto",paddingBottom:4}}>
+        {lists.map(function(l){return <div key={l.id} style={{display:"flex",borderRadius:8,overflow:"hidden",flexShrink:0,
+          border:activeListId===l.id?"1px solid "+accentColor+"55":"1px solid rgba(255,255,255,0.1)"}}>
+          <button className="btn" onClick={function(){setActiveListId(l.id);setTeams(null);}} style={{
+            padding:"8px 12px",fontSize:13,whiteSpace:"nowrap",
+            background:activeListId===l.id?"rgba(0,255,136,0.1)":"rgba(255,255,255,0.04)",
+            color:activeListId===l.id?accentColor:"rgba(255,255,255,0.5)"}}>{l.name} ({l.players.length})</button>
+          {lists.length>1&&<button className="btn" onClick={function(){deleteList(l.id);}} style={{
+            padding:"8px 9px",background:"rgba(239,68,68,0.07)",color:"rgba(239,68,68,0.5)",fontSize:13,
+            borderLeft:"1px solid rgba(255,255,255,0.07)"}}>&#10005;</button>}
+        </div>;})}
+        <button className="btn" onClick={function(){setNewListName("");setSheet("newList");}} style={{
+          padding:"8px 12px",borderRadius:8,background:"rgba(255,255,255,0.04)",color:"rgba(255,255,255,0.38)",
+          border:"1px dashed rgba(255,255,255,0.14)",fontSize:13,whiteSpace:"nowrap",flexShrink:0}}>+ New</button>
+      </div>
+
+      {/* Action buttons */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+        <button className="btn" onClick={function(){setForm({name:"",position:sport.positions[sport.positions.length-1]||"ANY",skill:3,editId:null});setSheet("addPlayer");}} style={{
+          padding:"14px 10px",borderRadius:11,fontSize:14,background:"rgba(0,255,136,0.09)",color:"#00ff88",
+          border:"1px solid rgba(0,255,136,0.25)"}}>+ Add Player</button>
+        <button className="btn" onClick={function(){setBulkText("");setBulkPos(sport.positions[sport.positions.length-1]||"ANY");setBulkSkill(3);setSheet("bulk");}} style={{
+          padding:"14px 10px",borderRadius:11,fontSize:14,background:"rgba(96,165,250,0.09)",color:"#60a5fa",
+          border:"1px solid rgba(96,165,250,0.2)"}}>&#128203; Bulk Import</button>
+      </div>
+
+      {/* Player list */}
+      {players.length===0
+        ?<div style={{textAlign:"center",padding:"40px 20px",color:"rgba(255,255,255,0.16)",fontSize:14,lineHeight:1.8}}>
+          No players yet.<br/>Add manually or paste a numbered list.
+         </div>
+        :<div>
+          {/* Duplicate warning banner */}
+          {(function(){
+            var seen={};var dupes=[];
+            players.forEach(function(p){var k=normaliseName(p.name);if(seen[k])dupes.push(p.name);else seen[k]=true;});
+            return dupes.length>0?<div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",
+              background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.25)",borderRadius:9,marginBottom:8}}>
+              <span style={{fontSize:14,flexShrink:0}}>⚠️</span>
+              <span style={{flex:1,fontSize:13,color:"#ef4444",fontWeight:600,lineHeight:1.4}}>
+                {dupes.length} duplicate{dupes.length>1?"s":""} in squad — may affect team balance
+              </span>
+              <button className="btn" onClick={cleanDuplicates} style={{
+                padding:"6px 12px",borderRadius:7,fontSize:12,fontWeight:800,flexShrink:0,
+                background:"#ef4444",color:"#fff",border:"none"}}>Fix Now</button>
+            </div>:null;
+          })()}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <span style={{fontSize:11,color:"rgba(255,255,255,0.3)",letterSpacing:"0.08em",textTransform:"uppercase"}}>{players.length} players</span>
+            <div style={{display:"flex",gap:6}}>
+              <button className="btn" onClick={cleanDuplicates} style={{
+                padding:"4px 9px",borderRadius:5,fontSize:11,background:"rgba(251,191,36,0.07)",color:"rgba(251,191,36,0.6)",
+                border:"1px solid rgba(251,191,36,0.18)"}}>&#128269; Dedupe</button>
+              <button className="btn" onClick={function(){updPlayers(function(){return [];});}} style={{
+                padding:"4px 9px",borderRadius:5,fontSize:11,background:"rgba(239,68,68,0.07)",color:"rgba(239,68,68,0.55)",
+                border:"1px solid rgba(239,68,68,0.16)"}}>Clear all</button>
+            </div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>
+            {(function(){
+              // Track seen names to highlight duplicates
+              var seen={};
+              return players.map(function(pl,i){
+                var key=normaliseName(pl.name);
+                var isDupe=seen[key]!==undefined;
+                seen[key]=(seen[key]||0)+1;
+                return <div key={pl.id} className="rh" style={{
+                  display:"flex",alignItems:"center",gap:8,padding:"11px 12px",borderRadius:10,cursor:"pointer",
+                  background:isDupe?"rgba(239,68,68,0.07)":"rgba(255,255,255,0.03)",
+                  border:isDupe?"1px solid rgba(239,68,68,0.25)":"1px solid rgba(255,255,255,0.07)",transition:"background 0.1s"
+                }} onClick={function(){startEdit(pl);}}>
+                  <span style={{fontSize:11,color:isDupe?"#ef4444":"rgba(255,255,255,0.2)",minWidth:20,textAlign:"right"}}>{isDupe?"!":i+1}</span>
+                  <span style={{fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:4,minWidth:32,textAlign:"center",
+                    background:(PCOLS[pl.position]||accentColor)+"33",color:PCOLS[pl.position]||accentColor}}>{pl.position}</span>
+                  <span style={{flex:1,fontSize:15,fontWeight:600,color:isDupe?"#ef4444":"rgba(255,255,255,0.85)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pl.name}</span>
+                  {isDupe&&<span style={{fontSize:9,fontWeight:800,padding:"1px 6px",borderRadius:20,background:"rgba(239,68,68,0.15)",color:"#ef4444",border:"1px solid rgba(239,68,68,0.3)",whiteSpace:"nowrap"}}>DUP</span>}
+                  <SkillDots value={pl.skill}/>
+                  <button className="btn" onClick={function(e){e.stopPropagation();removePlayer(pl.id);}} style={{
+                    width:28,height:28,borderRadius:6,background:"rgba(239,68,68,0.1)",color:"#ef4444",
+                    border:"1px solid rgba(239,68,68,0.2)",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>&#10005;</button>
+                </div>;
+              });
+            })()}
+          </div>
+        </div>
+      }
+
+      {/* Generate */}
+      <div style={{padding:"18px 0 8px",textAlign:"center"}}>
+        <button className="btn" onClick={generateTeams} disabled={!canGen} style={{
+          width:"100%",padding:"16px",borderRadius:12,fontSize:16,fontWeight:800,letterSpacing:"0.09em",
+          background:canGen?"linear-gradient(135deg,"+accentColor+","+accentColor+"aa)":"rgba(255,255,255,0.05)",
+          color:canGen?"#080c10":"rgba(255,255,255,0.18)",
+          boxShadow:canGen?"0 0 28px "+accentColor+"44,0 4px 16px rgba(0,0,0,0.4)":"none",border:"none"}}>
+          &#9889; GENERATE {effectiveNumTeams} BALANCED TEAMS
+        </button>
+        {!canGen&&players.length>0&&<div style={{marginTop:8,color:"rgba(255,255,255,0.22)",fontSize:13}}>Need at least {effectiveNumTeams} players</div>}
+      </div>
+    </div>}
+
+    {/* ═══ TEAMS VIEW ═══ */}
+    {view==="teams"&&<div style={{padding:"14px 14px 0"}}>
+      {!teams
+        ?<div style={{textAlign:"center",padding:"50px 20px",color:"rgba(255,255,255,0.18)",fontSize:14,lineHeight:1.9}}>
+            No teams yet.<br/>Go to <span style={{color:accentColor,fontWeight:700}}>Squad</span> tab and generate.
+          </div>
+        :<div>
+          <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+            <button className="btn" onClick={function(){setEditingTeams(function(e){return !e;});}} style={{
+              flex:1,padding:"11px",borderRadius:9,fontSize:14,minHeight:44,
+              background:editingTeams?"rgba(251,191,36,0.16)":"rgba(255,255,255,0.06)",
+              color:editingTeams?"#fbbf24":"rgba(255,255,255,0.55)",
+              border:editingTeams?"1px solid rgba(251,191,36,0.38)":"1px solid rgba(255,255,255,0.1)"}}>
+              {editingTeams?"&#10003; Done":"&#9998; Edit"}</button>
+            <button className="btn" onClick={openExport} style={{
+              flex:1,padding:"11px",borderRadius:9,fontSize:14,minHeight:44,
+              background:"rgba(96,165,250,0.09)",color:"#60a5fa",border:"1px solid rgba(96,165,250,0.22)"}}>&#128228; Export</button>
+            <button className="btn" onClick={reshuffleTeams} style={{
+              flex:1,padding:"11px",borderRadius:9,fontSize:14,minHeight:44,
+              background:"rgba(168,85,247,0.1)",color:"#a855f7",border:"1px solid rgba(168,85,247,0.25)"}}>&#127922; Shuffle</button>
+            <button className="btn" onClick={generateTeams} style={{
+              flex:1,padding:"11px",borderRadius:9,fontSize:14,minHeight:44,
+              background:"rgba(0,255,136,0.07)",color:"#00ff88",border:"1px solid rgba(0,255,136,0.18)"}}>&#9889; Rebalance</button>
+          </div>
+
+          {showExport&&<div style={{background:"rgba(96,165,250,0.05)",border:"1px solid rgba(96,165,250,0.2)",borderRadius:12,padding:14,marginBottom:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <span style={{fontSize:13,fontWeight:700,color:"#60a5fa",textTransform:"uppercase",letterSpacing:"0.08em"}}>Exported List</span>
+              <div style={{display:"flex",gap:7}}>
+                <button className="btn" onClick={copyClip} style={{padding:"7px 14px",borderRadius:7,fontSize:13,background:"#60a5fa",color:"#080c10"}}>Copy</button>
+                <button className="btn" onClick={function(){setShowExport(false);}} style={{padding:"7px 11px",borderRadius:7,fontSize:13,background:"rgba(255,255,255,0.08)",color:"rgba(255,255,255,0.5)"}}>&#10005;</button>
+              </div>
+            </div>
+            <textarea value={exportText} onChange={function(e){setExportText(e.target.value);}} rows={10}
+              style={{width:"100%",background:"rgba(0,0,0,0.35)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,
+                padding:"10px 12px",color:"rgba(255,255,255,0.75)",fontSize:14,fontFamily:"monospace",resize:"vertical",lineHeight:1.7}}/>
+          </div>}
+
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            {teams.map(function(team,ti){
+              var c=team.color;
+              var avg=team.players.length?(team.players.reduce(function(s,p){return s+p.skill;},0)/team.players.length).toFixed(1):"--";
+              return <div key={ti} className="t-card" style={{animationDelay:(ti*0.06)+"s",background:"rgba(255,255,255,0.02)",
+                border:"1px solid "+c+"33",borderRadius:14,overflow:"hidden",
+                outline:editingTeams&&dragOver===ti?"2px dashed "+c:"none"}}
+                onDragOver={function(e){e.preventDefault();setDragOver(ti);}}
+                onDrop={function(e){e.preventDefault();var d=dragRef.current;if(d.player&&d.fromTeam!==ti)movePlayer(d.fromTeam,ti,d.player.id);dragRef.current={player:null,fromTeam:null};setDragOver(null);}}
+                onDragLeave={function(){setDragOver(null);}}>
+                <div style={{background:"linear-gradient(135deg,"+c+"20,"+c+"06)",borderBottom:"1px solid "+c+"22",padding:"12px 14px"}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:9,flex:1,minWidth:0}}>
+                      {/* Jersey colour swatch — always visible, tap to change */}
+                      <button className="btn" title="Change jersey colour" onClick={function(){setJerseySheet(ti);}} style={{
+                        width:32,height:32,borderRadius:6,background:team.jersey||c,
+                        border:"2px solid rgba(255,255,255,0.25)",flexShrink:0,
+                        boxShadow:"0 2px 8px rgba(0,0,0,0.4)",position:"relative",overflow:"hidden"}}>
+                        <span style={{fontSize:14,lineHeight:1}}>&#128085;</span>
+                      </button>
+                      {editingTeams
+                        ?<input defaultValue={team.name} onBlur={function(e){renameTeam(ti,e.target.value||team.name);}}
+                            style={{background:"transparent",border:"none",borderBottom:"1px solid "+c+"77",color:c,fontSize:17,fontWeight:800,letterSpacing:"0.07em",textTransform:"uppercase",width:"100%",padding:"2px 0",fontFamily:"inherit"}}/>
+                        :<div style={{fontSize:17,fontWeight:800,letterSpacing:"0.07em",color:c,textTransform:"uppercase",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{team.name}</div>
+                      }
+                    </div>
+                    <div style={{textAlign:"right",marginLeft:8,flexShrink:0}}>
+                      <div style={{fontSize:21,fontWeight:800,color:c,lineHeight:1}}>{avg}</div>
+                      <div style={{fontSize:9,color:"rgba(255,255,255,0.28)",letterSpacing:"0.08em"}}>AVG SKILL</div>
+                    </div>
+                  </div>
+                  <div style={{fontSize:12,color:"rgba(255,255,255,0.32)",marginTop:5,display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{width:8,height:8,borderRadius:2,background:team.jersey||c,display:"inline-block",flexShrink:0}}/>
+                    <span>{team.players.length} player{team.players.length!==1?"s":""}</span>
+                    {team.jersey&&<span style={{color:"rgba(255,255,255,0.2)"}}>· {(JERSEY_PRESETS.find(function(p){return p.hex===team.jersey;})||{name:"Custom"}).name} jersey</span>}
+                  </div>
+                  {/* Position breakdown */}
+                  {(function(){
+                    var posCounts={};
+                    team.players.forEach(function(p){posCounts[p.position]=(posCounts[p.position]||0)+1;});
+                    return <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:5}}>
+                      {Object.keys(posCounts).map(function(pos){
+                        var isKey=["GK","Setter","Libero","PG"].indexOf(pos)!==-1;
+                        return <span key={pos} style={{fontSize:9,fontWeight:800,padding:"1px 6px",borderRadius:20,
+                          background:isKey?"rgba(251,191,36,0.15)":"rgba(255,255,255,0.06)",
+                          color:isKey?"#fbbf24":"rgba(255,255,255,0.35)",
+                          border:isKey?"1px solid rgba(251,191,36,0.3)":"1px solid rgba(255,255,255,0.08)"}}>
+                          {pos}×{posCounts[pos]}
+                        </span>;
+                      })}
+                    </div>;
+                  })()}
+                </div>
+                <div style={{padding:"9px 12px",display:"flex",flexDirection:"column",gap:5,minHeight:30}}>
+                  {team.players.map(function(pl,pi){return <div key={pl.id}
+                    draggable={editingTeams}
+                    onDragStart={function(){dragRef.current={player:pl,fromTeam:ti};}}
+                    style={{display:"flex",alignItems:"center",gap:7,padding:"9px 10px",background:"rgba(255,255,255,0.03)",
+                      borderRadius:8,border:"1px solid rgba(255,255,255,0.05)",cursor:editingTeams?"grab":"default"}}>
+                    <span style={{fontSize:10,color:"rgba(255,255,255,0.2)",minWidth:16}}>{pi+1}</span>
+                    <span style={{fontSize:9,fontWeight:800,padding:"2px 5px",borderRadius:4,minWidth:28,textAlign:"center",
+                      background:(PCOLS[pl.position]||c)+"33",color:PCOLS[pl.position]||c}}>{pl.position}</span>
+                    <span style={{flex:1,fontSize:14,fontWeight:600,color:"rgba(255,255,255,0.82)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pl.name}</span>
+                    <SkillDots value={pl.skill} color={c} size={8}/>
+                    {editingTeams&&<div style={{display:"flex",gap:5,marginLeft:4}}>
+                      <button className="btn" onClick={function(){setMoveModal({player:pl,fromTeamIdx:ti});}} style={{
+                        width:30,height:30,borderRadius:6,background:"rgba(96,165,250,0.14)",color:"#60a5fa",
+                        border:"1px solid rgba(96,165,250,0.22)",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>&#8644;</button>
+                      <button className="btn" onClick={function(){editTp(ti,pl);}} style={{
+                        width:30,height:30,borderRadius:6,background:"rgba(251,191,36,0.11)",color:"#fbbf24",
+                        border:"1px solid rgba(251,191,36,0.22)",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>&#9998;</button>
+                      <button className="btn" onClick={function(){removeFromTeam(ti,pl.id);}} style={{
+                        width:30,height:30,borderRadius:6,background:"rgba(239,68,68,0.1)",color:"#ef4444",
+                        border:"1px solid rgba(239,68,68,0.2)",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>&#10005;</button>
+                    </div>}
+                  </div>;})}
+                  {editingTeams&&<div style={{padding:"8px",borderRadius:7,border:"1px dashed rgba(255,255,255,0.1)",textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.18)",marginTop:2}}>drag here</div>}
+                </div>
+                {editingTeams&&bench.length>0&&<div style={{padding:"0 12px 12px"}}>
+                  <select onChange={function(e){var pid=parseInt(e.target.value);var p=bench.find(function(x){return x.id===pid;});if(p){addToTeam(ti,p);e.target.value="";}}} defaultValue="" style={{
+                    width:"100%",background:"rgba(0,255,136,0.07)",border:"1px dashed rgba(0,255,136,0.25)",borderRadius:8,
+                    padding:"9px 11px",color:"#00ff88",fontSize:14,fontFamily:"inherit",cursor:"pointer",outline:"none"}}>
+                    <option value="" disabled>+ Add from bench...</option>
+                    {bench.map(function(p){return <option key={p.id} value={p.id}>{p.name} [{p.position}]</option>;})}
+                  </select>
+                </div>}
+              </div>;
+            })}
+          </div>
+
+          {bench.length>0&&<div style={{background:"rgba(251,191,36,0.04)",border:"1px solid rgba(251,191,36,0.18)",borderRadius:12,padding:"12px 14px",marginTop:12}}>
+            <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.1em",color:"#fbbf24",marginBottom:9,textTransform:"uppercase"}}>Bench ({bench.length})</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {bench.map(function(pl){return <span key={pl.id} style={{display:"flex",alignItems:"center",gap:4,padding:"5px 10px",background:"rgba(255,255,255,0.05)",borderRadius:6,fontSize:13,color:"rgba(255,255,255,0.52)"}}>
+                <span style={{fontSize:9,color:PCOLS[pl.position]||accentColor,fontWeight:800}}>{pl.position}</span>{pl.name}
+              </span>;})}
+            </div>
+          </div>}
+        </div>
+      }
+    </div>}
+
+    {/* ═══ SHEETS ═══ */}
+
+    {(sheet==="addPlayer"||sheet==="editPlayer")&&<Sheet title={sheet==="editPlayer"?"Edit Player":"Add Player"} onClose={function(){setSheet(null);}}>
+      <AddPlayerSheet
+        form={form} setForm={setForm} positions={sport.positions}
+        isEdit={sheet==="editPlayer"}
+        profileDB={profileDB}
+        accent={sheet==="editPlayer"?"#fbbf24":accentColor}
+        onSave={savePlayer}/>
+    </Sheet>}
+
+    {sheet==="editTp"&&tpForm&&<Sheet title="Edit Player" onClose={function(){setSheet(null);setTpForm(null);}}>
+      <PlayerForm form={tpForm.form} positions={sport.positions}
+        setForm={function(f){setTpForm(function(t){return Object.assign({},t,{form:typeof f==="function"?f(t.form):f});});}}
+        onSave={saveTp} saveLabel="UPDATE PLAYER" accent="#fbbf24"/>
+    </Sheet>}
+
+    {moveModal&&<Sheet title={"Move "+moveModal.player.name} onClose={function(){setMoveModal(null);}}>
+      <div style={{display:"flex",flexDirection:"column",gap:9,paddingBottom:8}}>
+        <p style={{fontSize:14,color:"rgba(255,255,255,0.4)",marginBottom:4}}>Move to which team?</p>
+        {teams.map(function(t,ti){return ti!==moveModal.fromTeamIdx&&<button key={ti} className="btn"
+          onClick={function(){movePlayer(moveModal.fromTeamIdx,ti,moveModal.player.id);setMoveModal(null);}} style={{
+            padding:"14px",borderRadius:10,fontSize:15,background:t.color+"18",color:t.color,
+            border:"1px solid "+t.color+"33",textAlign:"left",minHeight:52}}>
+          &#8594; {t.name} ({t.players.length} players)</button>;})}
+        <button className="btn" onClick={function(){removeFromTeam(moveModal.fromTeamIdx,moveModal.player.id);setMoveModal(null);flash2("On bench!");}} style={{
+          padding:"14px",borderRadius:10,fontSize:14,background:"rgba(251,191,36,0.09)",color:"#fbbf24",
+          border:"1px solid rgba(251,191,36,0.22)",marginTop:4,minHeight:52}}>&#8594; Bench</button>
+      </div>
+    </Sheet>}
+
+    {sheet==="bulk"&&<Sheet title="Bulk Import" onClose={function(){setSheet(null);}}>
+      <div style={{display:"flex",flexDirection:"column",gap:16,paddingBottom:8}}>
+        <div>
+          <label style={{display:"block",fontSize:11,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.45)",marginBottom:8}}>Paste numbered list</label>
+          <textarea value={bulkText} onChange={function(e){setBulkText(e.target.value);}} rows={8}
+            placeholder={"1. Alex Johnson\n2. Marcus Lee\n3) Jamie Smith\n4 Chris Brown"}
+            style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:10,
+              padding:"11px 13px",color:"#fff",fontSize:15,resize:"vertical",lineHeight:1.6}}/>
+          <div style={{fontSize:12,color:"rgba(255,255,255,0.26)",marginTop:5}}>{bulkText.split("\n").filter(function(l){return l.trim();}).length} lines &bull; Numbers stripped automatically</div>
+        </div>
+        <div>
+          <label style={{display:"block",fontSize:11,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.45)",marginBottom:8}}>Default Position</label>
+          <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+            {sport.positions.map(function(pos){return <button key={pos} className="btn" onClick={function(){setBulkPos(pos);}} style={{
+              padding:"9px 13px",borderRadius:8,fontSize:13,minHeight:44,
+              background:bulkPos===pos?(PCOLS[pos]||accentColor):"rgba(255,255,255,0.07)",
+              color:bulkPos===pos?"#fff":"rgba(255,255,255,0.5)"}}>{pos}</button>;})}</div>
+        </div>
+        <div>
+          <label style={{display:"block",fontSize:11,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.45)",marginBottom:8}}>
+            Default Skill&nbsp;<span style={{color:"#00ff88",fontWeight:700}}>{skillLabel(bulkSkill)}</span>
+          </label>
+          <div style={{display:"flex",gap:7}}>
+            {[1,2,3,4,5].map(function(s){return <button key={s} className="btn" onClick={function(){setBulkSkill(s);}} style={{
+              flex:1,height:46,borderRadius:9,fontSize:17,fontWeight:800,
+              background:s<=bulkSkill?"rgba(0,255,136,0.15)":"rgba(255,255,255,0.06)",
+              color:s<=bulkSkill?"#00ff88":"rgba(255,255,255,0.22)",
+              border:s<=bulkSkill?"1px solid rgba(0,255,136,0.38)":"1px solid rgba(255,255,255,0.08)"}}>{s}</button>;})}</div>
+        </div>
+        <button className="btn" onClick={parseBulk} disabled={!bulkText.trim()} style={{
+          padding:"15px",borderRadius:11,fontSize:15,fontWeight:800,background:"#60a5fa",color:"#080c10",border:"none",
+          boxShadow:"0 0 18px rgba(96,165,250,0.28)"}}>IMPORT PLAYERS</button>
+      </div>
+    </Sheet>}
+
+    {sheet==="newList"&&<Sheet title="Create New List" onClose={function(){setSheet(null);}}>
+      <div style={{display:"flex",flexDirection:"column",gap:14,paddingBottom:8}}>
+        <input value={newListName} onChange={function(e){setNewListName(e.target.value);}} placeholder="e.g. Monday Night, Team A..." autoFocus
+          style={{width:"100%",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"13px 14px",color:"#fff",fontSize:16}}/>
+        <button className="btn" onClick={createList} disabled={!newListName.trim()} style={{padding:"15px",borderRadius:11,fontSize:15,fontWeight:800,background:accentColor,color:"#080c10",border:"none"}}>CREATE LIST</button>
+      </div>
+    </Sheet>}
+
+    {sheet==="renameList"&&<Sheet title="Rename List" onClose={function(){setSheet(null);}}>
+      <div style={{display:"flex",flexDirection:"column",gap:14,paddingBottom:8}}>
+        <input value={newListName} onChange={function(e){setNewListName(e.target.value);}} autoFocus
+          style={{width:"100%",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"13px 14px",color:"#fff",fontSize:16}}/>
+        <button className="btn" onClick={renameList} disabled={!newListName.trim()} style={{padding:"15px",borderRadius:11,fontSize:15,fontWeight:800,background:"#fbbf24",color:"#080c10",border:"none"}}>RENAME</button>
+      </div>
+    </Sheet>}
+
+    {showRules&&<RulesSheet sport={sport} onClose={function(){setShowRules(false);}}/>}
+
+    {/* ── DUPLICATE REVIEW SHEET ── */}
+    {sheet==="duplicateReview"&&duplicateReview&&(function(){
+      // Local state inside render — use a wrapper component so hooks work
+      return <DuplicateReviewSheet
+        review={duplicateReview}
+        onConfirm={confirmDuplicateReview}
+        onClose={function(){setDuplicateReview(null);setSheet(null);}}
+        sport={sport}
+      />;
+    })()}
+
+    {/* ── PROFILES SHEET ── */}
+    {showProfiles&&<Sheet title="&#128100; Player Profiles" onClose={function(){setShowProfiles(false);}}>
+      <div style={{display:"flex",flexDirection:"column",gap:16,paddingBottom:16}}>
+
+        {/* Save status */}
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",background:"rgba(0,255,136,0.07)",border:"1px solid rgba(0,255,136,0.2)",borderRadius:10}}>
+          <div style={{width:8,height:8,borderRadius:"50%",background:"#00ff88",boxShadow:"0 0 8px #00ff88",flexShrink:0}}/>
+          <div>
+            <div style={{fontSize:13,fontWeight:700,color:"#00ff88"}}>Profile DB — Auto-save enabled</div>
+            <div style={{fontSize:11,color:"rgba(255,255,255,0.38)",marginTop:1}}>Player profiles persist even when you clear your squad. Skill ratings are remembered across sessions.</div>
+          </div>
+        </div>
+
+        {/* Stats */}
+        {Object.keys(profileDB).length>0&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+          {[
+            {label:"Profiles Saved",val:Object.keys(profileDB).length},
+            {label:"Active Squad",val:players.length},
+            {label:"Avg Skill",val:(function(){
+              var vals=Object.values(profileDB);
+              return vals.length?(vals.reduce(function(s,p){return s+p.skill;},0)/vals.length).toFixed(1):"—";
+            })()}
+          ].map(function(s){return <div key={s.label} style={{background:"rgba(255,255,255,0.03)",borderRadius:9,padding:"11px 10px",textAlign:"center"}}>
+            <div style={{fontSize:20,fontWeight:800,color:"#00ff88"}}>{s.val}</div>
+            <div style={{fontSize:9,color:"rgba(255,255,255,0.35)",marginTop:3,letterSpacing:"0.06em",textTransform:"uppercase",lineHeight:1.3}}>{s.label}</div>
+          </div>;})}
+        </div>}
+
+        {/* Profile DB list */}
+        {Object.keys(profileDB).length===0
+          ?<div style={{textAlign:"center",padding:"30px 0",color:"rgba(255,255,255,0.2)",fontSize:14}}>No profiles saved yet.<br/>Add players to build your database.</div>
+          :<div>
+            <div style={{fontSize:10,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.35)",fontWeight:700,marginBottom:9,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span>All Saved Profiles ({Object.keys(profileDB).length})</span>
+              <span style={{color:"rgba(255,255,255,0.2)",letterSpacing:"0.06em"}}>A → Z</span>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:320,overflowY:"auto"}}>
+              {Object.values(profileDB).sort(function(a,b){
+                return a.name.toLowerCase().localeCompare(b.name.toLowerCase(),"en",{sensitivity:"base"});
+              }).map(function(pl,i){
+                var PCOLS2={GK:"#f59e0b",DEF:"#3b82f6",MID:"#10b981",FWD:"#ef4444",ANY:"#8b5cf6",
+                  PG:"#f59e0b",SG:"#3b82f6",SF:"#10b981",PF:"#ef4444",C:"#60a5fa",
+                  Setter:"#f59e0b",Libero:"#3b82f6",OH:"#10b981",MB:"#ef4444",OPP:"#a78bfa",
+                  Singles:"#60a5fa",Doubles:"#fbbf24"};
+                var inCurrentSquad=players.some(function(p){return p.name.trim().toLowerCase()===pl.name.trim().toLowerCase();});
+                return <div key={pl.name} style={{display:"flex",alignItems:"center",gap:7,padding:"8px 10px",
+                  background:inCurrentSquad?"rgba(0,255,136,0.05)":"rgba(255,255,255,0.03)",
+                  borderRadius:8,border:inCurrentSquad?"1px solid rgba(0,255,136,0.15)":"1px solid rgba(255,255,255,0.06)"}}>
+                  <span style={{fontSize:9,fontWeight:800,padding:"2px 5px",borderRadius:3,minWidth:28,textAlign:"center",
+                    background:(PCOLS2[pl.position]||"#8b5cf6")+"33",color:PCOLS2[pl.position]||"#8b5cf6"}}>{pl.position}</span>
+                  <span style={{flex:1,fontSize:14,fontWeight:600,color:inCurrentSquad?"rgba(0,255,136,0.85)":"rgba(255,255,255,0.82)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pl.name}</span>
+                  {inCurrentSquad&&<span style={{fontSize:9,color:"#00ff88",fontWeight:700,whiteSpace:"nowrap"}}>In Squad</span>}
+                  <SkillDots value={pl.skill} size={8}/>
+                  <span style={{fontSize:11,color:"rgba(255,255,255,0.4)",minWidth:24,textAlign:"right",fontWeight:700}}>{pl.skill}</span>
+                </div>;
+              })}
+            </div>
+          </div>
+        }
+
+        {/* Danger zone */}
+        <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:14,marginTop:4,display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{fontSize:10,color:"rgba(255,255,255,0.28)",letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:6}}>Profile Database</div>
+          <button className="btn" onClick={function(){
+            // Force reseed entire DB from all lists
+            var updated={};
+            lists.forEach(function(l){(l.players||[]).forEach(function(p){upsertProfile(updated,p);});});
+            try{localStorage.setItem(PROFILE_DB_KEY,JSON.stringify(updated));}catch(e){}
+            setProfileDB(updated);
+            flash2("Profile DB rebuilt — "+Object.keys(updated).length+" profiles!");
+          }} style={{width:"100%",padding:"12px",borderRadius:9,fontSize:13,background:"rgba(0,255,136,0.07)",color:"rgba(0,255,136,0.7)",border:"1px solid rgba(0,255,136,0.18)",marginBottom:8}}>
+            &#128260; Rebuild Profile DB from All Lists
+          </button>
+          <button className="btn" onClick={function(){
+            if(window.confirm("Clear current squad only? Profile database will be kept.")){
+              updPlayers(function(){return [];});
+              setShowProfiles(false);flash2("Squad cleared — profiles kept");
+            }
+          }} style={{width:"100%",padding:"12px",borderRadius:9,fontSize:13,background:"rgba(251,191,36,0.07)",color:"rgba(251,191,36,0.7)",border:"1px solid rgba(251,191,36,0.18)"}}>
+            &#128465; Clear Current Squad (keep profiles)
+          </button>
+          <button className="btn" onClick={function(){
+            if(window.confirm("Delete ALL saved profiles? This cannot be undone. Your squad lists will remain.")){
+              try{localStorage.removeItem(PROFILE_DB_KEY);}catch(e){}
+              setProfileDB({});flash2("Profile database cleared");
+            }
+          }} style={{width:"100%",padding:"12px",borderRadius:9,fontSize:13,background:"rgba(239,68,68,0.07)",color:"rgba(239,68,68,0.65)",border:"1px solid rgba(239,68,68,0.18)"}}>
+            &#128465; Clear Profile Database
+          </button>
+          <button className="btn" onClick={function(){
+            if(window.confirm("Clear everything — squad, lists AND profiles? This cannot be undone.")){
+              try{localStorage.removeItem(STORAGE_KEY);localStorage.removeItem(PROFILE_DB_KEY);}catch(e){}
+              setLists([{id:1,name:"My Squad",players:[]}]);
+              setActiveListId(1);setTeams(null);setProfileDB({});setShowProfiles(false);
+              flash2("All data cleared");
+            }
+          }} style={{width:"100%",padding:"12px",borderRadius:9,fontSize:13,background:"rgba(239,68,68,0.08)",color:"rgba(239,68,68,0.55)",border:"1px solid rgba(239,68,68,0.14)"}}>
+            &#128465; Clear Everything
+          </button>
+        </div>
+      </div>
+    </Sheet>}
+
+    {jerseySheet!==null&&teams&&teams[jerseySheet]&&<Sheet title={"&#128085; "+teams[jerseySheet].name+" — Jersey Colour"} onClose={function(){setJerseySheet(null);}}>
+      <div style={{display:"flex",flexDirection:"column",gap:18,paddingBottom:12}}>
+        {/* Current colour preview */}
+        <div style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",background:"rgba(255,255,255,0.04)",borderRadius:12,border:"1px solid rgba(255,255,255,0.09)"}}>
+          <div style={{width:48,height:48,borderRadius:10,background:teams[jerseySheet].jersey||"#888",border:"3px solid rgba(255,255,255,0.2)",boxShadow:"0 4px 14px rgba(0,0,0,0.4)",fontSize:22,display:"flex",alignItems:"center",justifyContent:"center"}}>&#128085;</div>
+          <div>
+            <div style={{fontSize:13,color:"rgba(255,255,255,0.45)",marginBottom:3}}>Current colour</div>
+            <div style={{fontSize:16,fontWeight:700,color:"#fff"}}>{(JERSEY_PRESETS.find(function(p){return p.hex===teams[jerseySheet].jersey;})||{name:"Custom"}).name}</div>
+            <div style={{fontSize:12,color:"rgba(255,255,255,0.3)",marginTop:1,fontFamily:"monospace"}}>{teams[jerseySheet].jersey}</div>
+          </div>
+        </div>
+
+        {/* Preset swatches */}
+        <div>
+          <div style={{fontSize:10,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.38)",fontWeight:700,marginBottom:10}}>Common Jersey Colours</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+            {JERSEY_PRESETS.map(function(p){
+              var active=teams[jerseySheet].jersey===p.hex;
+              return <button key={p.hex} className="btn" onClick={function(){changeJersey(jerseySheet,p.hex);}} style={{
+                padding:"10px 6px",borderRadius:9,display:"flex",flexDirection:"column",alignItems:"center",gap:5,
+                background:active?"rgba(255,255,255,0.1)":"rgba(255,255,255,0.04)",
+                border:active?"2px solid rgba(255,255,255,0.5)":"2px solid transparent"}}>
+                <div style={{width:28,height:28,borderRadius:6,background:p.hex,boxShadow:"0 2px 8px rgba(0,0,0,0.35)",
+                  border:p.hex==="#f0f0f0"?"1px solid rgba(255,255,255,0.15)":"none"}}/>
+                <span style={{fontSize:10,color:active?"#fff":"rgba(255,255,255,0.45)",fontWeight:active?700:500,letterSpacing:"0.02em"}}>{p.name}</span>
+              </button>;
+            })}
+          </div>
+        </div>
+
+        {/* Custom hex / colour picker */}
+        <div>
+          <div style={{fontSize:10,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.38)",fontWeight:700,marginBottom:10}}>Custom Colour</div>
+          <div style={{display:"flex",gap:10,alignItems:"center"}}>
+            <input type="color" value={teams[jerseySheet].jersey||"#ffffff"} onChange={function(e){changeJersey(jerseySheet,e.target.value);}}
+              style={{width:52,height:52,borderRadius:10,border:"2px solid rgba(255,255,255,0.2)",background:"transparent",cursor:"pointer",padding:2}}/>
+            <div style={{flex:1}}>
+              <div style={{fontSize:12,color:"rgba(255,255,255,0.4)",marginBottom:4}}>Tap the colour wheel to pick any colour</div>
+              <input value={teams[jerseySheet].jersey||""} onChange={function(e){
+                var v=e.target.value;
+                if(/^#[0-9a-fA-F]{6}$/.test(v))changeJersey(jerseySheet,v);
+              }} placeholder="#rrggbb" maxLength={7}
+                style={{width:"100%",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:8,
+                  padding:"9px 12px",color:"#fff",fontSize:15,fontFamily:"monospace"}}/>
+            </div>
+          </div>
+        </div>
+
+        <button className="btn" onClick={function(){setJerseySheet(null);}} style={{
+          padding:"14px",borderRadius:11,fontSize:15,fontWeight:800,background:"#00ff88",color:"#080c10",border:"none",
+          boxShadow:"0 0 20px rgba(0,255,136,0.3)"}}>&#10003; Done</button>
+      </div>
+    </Sheet>}
+
+  </div>;
+}
+
+class ErrorBoundary extends React.Component{
+  constructor(p){super(p);this.state={err:null};}
+  static getDerivedStateFromError(e){return {err:e};}
+  render(){
+    if(this.state.err){
+      return <div style={{minHeight:"100vh",background:"#080c10",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'Rajdhani',sans-serif"}}>
+        <div style={{fontSize:40,marginBottom:16}}>⚠️</div>
+        <div style={{fontSize:18,fontWeight:700,color:"#ef4444",marginBottom:8}}>Something went wrong</div>
+        <div style={{fontSize:13,color:"rgba(255,255,255,0.4)",marginBottom:24,textAlign:"center",maxWidth:320}}>
+          {this.state.err.message||"An unexpected error occurred."}
+        </div>
+        <button onClick={function(){
+          try{localStorage.removeItem("team-selector-v1");}catch(e){}
+          window.location.reload();
+        }} style={{padding:"12px 24px",borderRadius:9,background:"#00ff88",color:"#080c10",border:"none",fontSize:15,fontWeight:800,cursor:"pointer"}}>
+          Reset &amp; Reload
+        </button>
+        <div style={{fontSize:11,color:"rgba(255,255,255,0.2)",marginTop:12}}>Profile database will be kept</div>
+      </div>;
+    }
+    return this.props.children;
+  }
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  React.createElement(ErrorBoundary,null,React.createElement(App))
+);
+</script>
+</body>
+</html>
