@@ -816,6 +816,12 @@ function App(){
   function savePlayer(){
     if(!form.name.trim())return;
     var playerData={name:form.name.trim(),position:form.position,skill:form.skill};
+    // Block duplicate names in the current squad (except when editing existing player)
+    var normNew=normaliseName(playerData.name);
+    var isDupe=players.some(function(p){
+      return normaliseName(p.name)===normNew&&p.id!==form.editId;
+    });
+    if(isDupe){flash2(playerData.name+" is already in the squad!","err");return;}
     if(form.editId!=null){
       updPlayers(function(ps){return ps.map(function(p){return p.id===form.editId?Object.assign({},p,playerData):p;});});
       flash2("Updated!");
@@ -829,6 +835,20 @@ function App(){
   function removePlayer(id){updPlayers(function(ps){return ps.filter(function(p){return p.id!==id;});});}
   function startEdit(pl){setForm({name:pl.name,position:pl.position,skill:pl.skill,editId:pl.id});setSheet("editPlayer");}
 
+  // Scan current squad for duplicate names and remove extras (keep first occurrence)
+  function cleanDuplicates(){
+    var seen={};var removed=0;
+    updPlayers(function(ps){
+      return ps.filter(function(p){
+        var key=normaliseName(p.name);
+        if(seen[key]){removed++;return false;}
+        seen[key]=true;return true;
+      });
+    });
+    if(removed>0)flash2(removed+" duplicate"+(removed>1?"s":"")+" removed!");
+    else flash2("No duplicates found ✓");
+  }
+
   const [duplicateReview,setDuplicateReview]=useState(null);
 
   function parseBulk(){
@@ -836,22 +856,32 @@ function App(){
       .map(function(l){return l.replace(/^\d+[\.\)\-\s]+/,"").trim();}).filter(Boolean);
     if(!parsed.length)return;
 
-    var withMatches=parsed.map(function(name){
-      var savedProfile=lookupProfile(profileDB,name); // search profile DB directly
-      var inSquad=players.some(function(p){return p.name.trim().toLowerCase()===name.trim().toLowerCase();});
+    // Dedupe within the import list itself (keep first occurrence of each name)
+    var seenInList={};
+    var deduped=[];
+    parsed.forEach(function(name){
+      var key=normaliseName(name);
+      if(!seenInList[key]){seenInList[key]=true;deduped.push(name);}
+    });
+    var removedFromList=parsed.length-deduped.length;
+
+    var withMatches=deduped.map(function(name){
+      var savedProfile=lookupProfile(profileDB,name);
+      var inSquad=players.some(function(p){return normaliseName(p.name)===normaliseName(name);});
       return {name:name,position:savedProfile?savedProfile.position:bulkPos,skill:savedProfile?savedProfile.skill:bulkSkill,savedProfile:savedProfile,inSquad:inSquad};
     });
 
     var hasAnything=withMatches.some(function(x){return x.savedProfile||x.inSquad;});
+    if(removedFromList>0)flash2(removedFromList+" duplicate"+(removedFromList>1?"s":"")+" removed from import list");
+
     if(hasAnything){
-      // Show review — profiles auto-filled, user can override
-      setDuplicateReview({pending:withMatches,bulkPos:bulkPos,bulkSkill:bulkSkill});
+      setDuplicateReview({pending:withMatches,bulkPos:bulkPos,bulkSkill:bulkSkill,removedFromList:removedFromList});
       setSheet("duplicateReview");
     }else{
-      // No matches at all — import straight away
       updPlayers(function(ps){return ps.concat(withMatches.map(function(x){return {id:nid++,name:x.name,position:x.position,skill:x.skill};}));});
       syncToProfileDB(withMatches);
-      flash2(parsed.length+" players imported!");setBulkText("");setSheet(null);
+      flash2(deduped.length+" players imported!"+(removedFromList>0?" ("+removedFromList+" dupes removed)":""));
+      setBulkText("");setSheet(null);
     }
   }
 
@@ -890,24 +920,52 @@ function App(){
   }
 
   var effectiveNumTeams=numTeams;
+  var KEY_POSITIONS=["GK","Setter","Libero","PG"];
+
   function generateTeams(){
     if(players.length<effectiveNumTeams)return;
-    var sorted=players.slice().sort(function(a,b){return b.skill-a.skill;});
-    var result=[];
-    // Pick distinct jersey colours spread across the presets palette
     var step=Math.max(1,Math.floor(JERSEY_PRESETS.length/effectiveNumTeams));
+    var result=[];
     for(var i=0;i<effectiveNumTeams;i++){
       var prevName=teams&&teams[i]?teams[i].name:"Team "+(i+1);
-      // Keep jersey colour if team already had one, otherwise auto-pick
       var prevJersey=teams&&teams[i]&&teams[i].jersey?teams[i].jersey:JERSEY_PRESETS[(i*step)%JERSEY_PRESETS.length].hex;
       result.push({name:prevName,color:TCOLS[i%TCOLS.length],jersey:prevJersey,players:[]});
     }
-    sorted.forEach(function(p,i){
-      var round=Math.floor(i/effectiveNumTeams);
-      var idx=round%2===0?i%effectiveNumTeams:effectiveNumTeams-1-(i%effectiveNumTeams);
-      result[idx].players.push(Object.assign({},p));
+
+    function teamSkill(t){
+      return t.players.reduce(function(s,p){return s+p.skill;},0);
+    }
+
+    var allSorted=players.map(function(p){return Object.assign({},p);});
+    allSorted.sort(function(a,b){return b.skill-a.skill;});
+
+    var keyPlayers=allSorted.filter(function(p){return KEY_POSITIONS.indexOf(p.position)!==-1;});
+    var otherPlayers=allSorted.filter(function(p){return KEY_POSITIONS.indexOf(p.position)===-1;});
+
+    // STEP 1: For each key position type, strictly rotate across teams
+    // GK1→team0, GK2→team1, GK3→team2, GK4→team0, etc.
+    KEY_POSITIONS.forEach(function(pos){
+      var group=keyPlayers.filter(function(p){return p.position===pos;});
+      // Sort best-to-worst so best GK goes to team 0
+      group.sort(function(a,b){return b.skill-a.skill;});
+      group.forEach(function(p,idx){
+        // Strict round-robin by index — guaranteed one per team
+        result[idx%effectiveNumTeams].players.push(p);
+      });
     });
-    setTeams(result);setEditingTeams(false);setShowExport(false);setView("teams");flash2("Teams generated!");
+
+    // STEP 2: Remaining players — greedy assign to lowest skill-total team
+    otherPlayers.forEach(function(p){
+      var minIdx=0;var minS=teamSkill(result[0]);
+      result.forEach(function(t,idx){
+        var s=teamSkill(t);
+        if(s<minS){minS=s;minIdx=idx;}
+      });
+      result[minIdx].players.push(p);
+    });
+
+    setTeams(result);setEditingTeams(false);setShowExport(false);setView("teams");
+    flash2("Teams generated!");
   }
 
   function updTeams(fn){setTeams(function(ts){return fn(ts.map(function(t){return Object.assign({},t,{players:t.players.slice()});}));});}
@@ -1131,6 +1189,22 @@ function App(){
           border:"1px dashed rgba(255,255,255,0.14)",fontSize:13,whiteSpace:"nowrap",flexShrink:0}}>+ New</button>
       </div>
 
+      {/* ANY position warning — GK separation won't work if positions not set */}
+      {(function(){
+        var anyCount=players.filter(function(p){return p.position==="ANY";}).length;
+        return anyCount>0&&players.length>0?<div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",
+          background:"rgba(251,191,36,0.07)",border:"1px solid rgba(251,191,36,0.22)",borderRadius:9,marginBottom:10}}>
+          <span style={{fontSize:14,flexShrink:0}}>⚠️</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,color:"#fbbf24",fontWeight:700}}>{anyCount} player{anyCount>1?"s":""} have no position set</div>
+            <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:1}}>Set positions (GK, DEF etc.) for proper team balancing</div>
+          </div>
+          <button className="btn" onClick={function(){setSheet("fixPositions");}} style={{
+            padding:"6px 12px",borderRadius:7,fontSize:12,fontWeight:800,flexShrink:0,
+            background:"#fbbf24",color:"#080c10",border:"none",whiteSpace:"nowrap"}}>Fix Now</button>
+        </div>:null;
+      })()}
+
       {/* Action buttons */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
         <button className="btn" onClick={function(){setForm({name:"",position:sport.positions[sport.positions.length-1]||"ANY",skill:3,editId:null});setSheet("addPlayer");}} style={{
@@ -1147,26 +1221,57 @@ function App(){
           No players yet.<br/>Add manually or paste a numbered list.
          </div>
         :<div>
+          {/* Duplicate warning banner */}
+          {(function(){
+            var seen={};var dupes=[];
+            players.forEach(function(p){var k=normaliseName(p.name);if(seen[k])dupes.push(p.name);else seen[k]=true;});
+            return dupes.length>0?<div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",
+              background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.25)",borderRadius:9,marginBottom:8}}>
+              <span style={{fontSize:14,flexShrink:0}}>⚠️</span>
+              <span style={{flex:1,fontSize:13,color:"#ef4444",fontWeight:600,lineHeight:1.4}}>
+                {dupes.length} duplicate{dupes.length>1?"s":""} in squad — may affect team balance
+              </span>
+              <button className="btn" onClick={cleanDuplicates} style={{
+                padding:"6px 12px",borderRadius:7,fontSize:12,fontWeight:800,flexShrink:0,
+                background:"#ef4444",color:"#fff",border:"none"}}>Fix Now</button>
+            </div>:null;
+          })()}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
             <span style={{fontSize:11,color:"rgba(255,255,255,0.3)",letterSpacing:"0.08em",textTransform:"uppercase"}}>{players.length} players</span>
-            <button className="btn" onClick={function(){updPlayers(function(){return [];});}} style={{
-              padding:"4px 10px",borderRadius:5,fontSize:11,background:"rgba(239,68,68,0.07)",color:"rgba(239,68,68,0.55)",
-              border:"1px solid rgba(239,68,68,0.16)"}}>Clear all</button>
+            <div style={{display:"flex",gap:6}}>
+              <button className="btn" onClick={cleanDuplicates} style={{
+                padding:"4px 9px",borderRadius:5,fontSize:11,background:"rgba(251,191,36,0.07)",color:"rgba(251,191,36,0.6)",
+                border:"1px solid rgba(251,191,36,0.18)"}}>&#128269; Dedupe</button>
+              <button className="btn" onClick={function(){updPlayers(function(){return [];});}} style={{
+                padding:"4px 9px",borderRadius:5,fontSize:11,background:"rgba(239,68,68,0.07)",color:"rgba(239,68,68,0.55)",
+                border:"1px solid rgba(239,68,68,0.16)"}}>Clear all</button>
+            </div>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:5}}>
-            {players.map(function(pl,i){return <div key={pl.id} className="rh" style={{
-              display:"flex",alignItems:"center",gap:8,padding:"11px 12px",borderRadius:10,cursor:"pointer",
-              background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",transition:"background 0.1s"
-            }} onClick={function(){startEdit(pl);}}>
-              <span style={{fontSize:11,color:"rgba(255,255,255,0.2)",minWidth:20,textAlign:"right"}}>{i+1}</span>
-              <span style={{fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:4,minWidth:32,textAlign:"center",
-                background:(PCOLS[pl.position]||accentColor)+"33",color:PCOLS[pl.position]||accentColor}}>{pl.position}</span>
-              <span style={{flex:1,fontSize:15,fontWeight:600,color:"rgba(255,255,255,0.85)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pl.name}</span>
-              <SkillDots value={pl.skill}/>
-              <button className="btn" onClick={function(e){e.stopPropagation();removePlayer(pl.id);}} style={{
-                width:28,height:28,borderRadius:6,background:"rgba(239,68,68,0.1)",color:"#ef4444",
-                border:"1px solid rgba(239,68,68,0.2)",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>&#10005;</button>
-            </div>;})}
+            {(function(){
+              // Track seen names to highlight duplicates
+              var seen={};
+              return players.map(function(pl,i){
+                var key=normaliseName(pl.name);
+                var isDupe=seen[key]!==undefined;
+                seen[key]=(seen[key]||0)+1;
+                return <div key={pl.id} className="rh" style={{
+                  display:"flex",alignItems:"center",gap:8,padding:"11px 12px",borderRadius:10,cursor:"pointer",
+                  background:isDupe?"rgba(239,68,68,0.07)":"rgba(255,255,255,0.03)",
+                  border:isDupe?"1px solid rgba(239,68,68,0.25)":"1px solid rgba(255,255,255,0.07)",transition:"background 0.1s"
+                }} onClick={function(){startEdit(pl);}}>
+                  <span style={{fontSize:11,color:isDupe?"#ef4444":"rgba(255,255,255,0.2)",minWidth:20,textAlign:"right"}}>{isDupe?"!":i+1}</span>
+                  <span style={{fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:4,minWidth:32,textAlign:"center",
+                    background:(PCOLS[pl.position]||accentColor)+"33",color:PCOLS[pl.position]||accentColor}}>{pl.position}</span>
+                  <span style={{flex:1,fontSize:15,fontWeight:600,color:isDupe?"#ef4444":"rgba(255,255,255,0.85)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pl.name}</span>
+                  {isDupe&&<span style={{fontSize:9,fontWeight:800,padding:"1px 6px",borderRadius:20,background:"rgba(239,68,68,0.15)",color:"#ef4444",border:"1px solid rgba(239,68,68,0.3)",whiteSpace:"nowrap"}}>DUP</span>}
+                  <SkillDots value={pl.skill}/>
+                  <button className="btn" onClick={function(e){e.stopPropagation();removePlayer(pl.id);}} style={{
+                    width:28,height:28,borderRadius:6,background:"rgba(239,68,68,0.1)",color:"#ef4444",
+                    border:"1px solid rgba(239,68,68,0.2)",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>&#10005;</button>
+                </div>;
+              });
+            })()}
           </div>
         </div>
       }
@@ -1258,6 +1363,22 @@ function App(){
                     <span>{team.players.length} player{team.players.length!==1?"s":""}</span>
                     {team.jersey&&<span style={{color:"rgba(255,255,255,0.2)"}}>· {(JERSEY_PRESETS.find(function(p){return p.hex===team.jersey;})||{name:"Custom"}).name} jersey</span>}
                   </div>
+                  {/* Position breakdown */}
+                  {(function(){
+                    var posCounts={};
+                    team.players.forEach(function(p){posCounts[p.position]=(posCounts[p.position]||0)+1;});
+                    return <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:5}}>
+                      {Object.keys(posCounts).map(function(pos){
+                        var isKey=["GK","Setter","Libero","PG"].indexOf(pos)!==-1;
+                        return <span key={pos} style={{fontSize:9,fontWeight:800,padding:"1px 6px",borderRadius:20,
+                          background:isKey?"rgba(251,191,36,0.15)":"rgba(255,255,255,0.06)",
+                          color:isKey?"#fbbf24":"rgba(255,255,255,0.35)",
+                          border:isKey?"1px solid rgba(251,191,36,0.3)":"1px solid rgba(255,255,255,0.08)"}}>
+                          {pos}×{posCounts[pos]}
+                        </span>;
+                      })}
+                    </div>;
+                  })()}
                 </div>
                 <div style={{padding:"9px 12px",display:"flex",flexDirection:"column",gap:5,minHeight:30}}>
                   {team.players.map(function(pl,pi){return <div key={pl.id}
@@ -1392,6 +1513,40 @@ function App(){
 
     {showRules&&<RulesSheet sport={sport} onClose={function(){setShowRules(false);}}/>}
 
+    {/* ── FIX POSITIONS SHEET ── */}
+    {sheet==="fixPositions"&&<Sheet title="&#127919; Set Player Positions" onClose={function(){setSheet(null);}}>
+      <div style={{display:"flex",flexDirection:"column",gap:12,paddingBottom:16}}>
+        <div style={{padding:"10px 13px",background:"rgba(251,191,36,0.07)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:9,fontSize:13,color:"rgba(255,255,255,0.6)",lineHeight:1.5}}>
+          Tap a position for each player. This is used for team balancing — GKs will be split across teams automatically.
+        </div>
+        {players.map(function(pl){
+          return <div key={pl.id} style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:10,padding:"10px 12px"}}>
+            <div style={{fontSize:14,fontWeight:700,color:"rgba(255,255,255,0.85)",marginBottom:8}}>{pl.name}</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {sport.positions.map(function(pos){
+                var active=pl.position===pos;
+                var col=PCOLS[pos]||accentColor;
+                return <button key={pos} className="btn" onClick={function(){
+                  updPlayers(function(ps){return ps.map(function(p){return p.id===pl.id?Object.assign({},p,{position:pos}):p;});});
+                  syncToProfileDB([Object.assign({},pl,{position:pos})]);
+                }} style={{
+                  padding:"7px 12px",borderRadius:7,fontSize:13,minHeight:36,
+                  background:active?col:"rgba(255,255,255,0.06)",
+                  color:active?"#fff":"rgba(255,255,255,0.5)",
+                  border:active?"none":"1px solid rgba(255,255,255,0.1)",
+                  fontWeight:active?800:600}}>{pos}</button>;
+              })}
+            </div>
+          </div>;
+        })}
+        <button className="btn" onClick={function(){setSheet(null);}} style={{
+          padding:"14px",borderRadius:11,fontSize:15,fontWeight:800,
+          background:accentColor,color:"#080c10",border:"none",marginTop:4}}>
+          &#10003; Done — Save Positions
+        </button>
+      </div>
+    </Sheet>}
+
     {/* ── DUPLICATE REVIEW SHEET ── */}
     {sheet==="duplicateReview"&&duplicateReview&&(function(){
       // Local state inside render — use a wrapper component so hooks work
@@ -1435,11 +1590,14 @@ function App(){
         {Object.keys(profileDB).length===0
           ?<div style={{textAlign:"center",padding:"30px 0",color:"rgba(255,255,255,0.2)",fontSize:14}}>No profiles saved yet.<br/>Add players to build your database.</div>
           :<div>
-            <div style={{fontSize:10,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.35)",fontWeight:700,marginBottom:9}}>
-              All Saved Profiles ({Object.keys(profileDB).length})
+            <div style={{fontSize:10,letterSpacing:"0.12em",textTransform:"uppercase",color:"rgba(255,255,255,0.35)",fontWeight:700,marginBottom:9,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span>All Saved Profiles ({Object.keys(profileDB).length})</span>
+              <span style={{color:"rgba(255,255,255,0.2)",letterSpacing:"0.06em"}}>A → Z</span>
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:320,overflowY:"auto"}}>
-              {Object.values(profileDB).sort(function(a,b){return a.name.localeCompare(b.name);}).map(function(pl,i){
+              {Object.values(profileDB).sort(function(a,b){
+                return a.name.toLowerCase().localeCompare(b.name.toLowerCase(),"en",{sensitivity:"base"});
+              }).map(function(pl,i){
                 var PCOLS2={GK:"#f59e0b",DEF:"#3b82f6",MID:"#10b981",FWD:"#ef4444",ANY:"#8b5cf6",
                   PG:"#f59e0b",SG:"#3b82f6",SF:"#10b981",PF:"#ef4444",C:"#60a5fa",
                   Setter:"#f59e0b",Libero:"#3b82f6",OH:"#10b981",MB:"#ef4444",OPP:"#a78bfa",
